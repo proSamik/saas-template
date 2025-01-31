@@ -28,6 +28,31 @@ type AuthHandler struct {
 	authLimiter *middleware.RateLimiter
 }
 
+// Logout handles user logout by invalidating the current session
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Get token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+
+	// Remove "Bearer " prefix
+	tokenString := authHeader[7:] // Skip "Bearer " prefix
+
+	// Invalidate the session
+	if err := h.db.InvalidateSession(tokenString); err != nil {
+		log.Printf("[Auth] Error invalidating session: %v", err)
+		http.Error(w, "Error invalidating session", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Successfully logged out",
+	})
+}
+
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
 func NewAuthHandler(db *database.DB, jwtSecret string) *AuthHandler {
 	// Create rate limiter for auth endpoints - 5 attempts per minute
@@ -261,6 +286,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get device info from user agent
+	deviceInfo := r.UserAgent()
+
 	log.Printf("[Auth] Generating JWT for user: %s", user.ID)
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
@@ -274,6 +302,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[Auth] Error generating token: %v", err)
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Create session record
+	if err := h.db.CreateSession(user.ID, tokenString, accessExp, deviceInfo); err != nil {
+		log.Printf("[Auth] Error creating session: %v", err)
+		http.Error(w, "Error creating session", http.StatusInternalServerError)
 		return
 	}
 
