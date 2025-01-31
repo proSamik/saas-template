@@ -1,4 +1,7 @@
-// Package main is the entry point for the SaaS platform backend
+// Package main is the entry point for the SaaS platform backend.
+// It initializes the database connection, sets up HTTP routes, and starts the server.
+// The server provides RESTful APIs for user authentication, profile management,
+// and other core functionalities of the SaaS platform.
 package main
 
 import (
@@ -7,12 +10,21 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
-	"github.com/rs/cors"
 	"saas-server/database"
 	"saas-server/handlers"
+	"saas-server/middleware"
+
+	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 )
 
+// main initializes and starts the HTTP server with the following steps:
+// 1. Loads environment variables from .env file
+// 2. Establishes database connection and initializes schema
+// 3. Sets up authentication handlers and middleware
+// 4. Configures routes for both public and protected endpoints
+// 5. Configures CORS settings for cross-origin requests
+// 6. Starts the HTTP server on the specified port
 func main() {
 	// Load environment variables
 	if err := godotenv.Load(); err != nil {
@@ -41,16 +53,22 @@ func main() {
 		log.Fatal("Error initializing schema:", err)
 	}
 
-	// Initialize handlers
+	// Initialize handlers and middleware
 	authHandler := handlers.NewAuthHandler(db, os.Getenv("JWT_SECRET"))
+	authMiddleware := middleware.NewAuthMiddleware(os.Getenv("JWT_SECRET"))
 
 	// Create router
 	mux := http.NewServeMux()
 
-	// Auth routes
+	// Auth routes (public)
 	mux.HandleFunc("/auth/register", authHandler.Register)
 	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.HandleFunc("/auth/google", authHandler.GoogleAuth)
+	mux.HandleFunc("/auth/refresh", authHandler.RefreshToken)
+
+	// User routes (protected)
+	mux.Handle("/user/profile", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
+	mux.Handle("/user/password", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdatePassword)))
 
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
@@ -70,4 +88,4 @@ func main() {
 	if err := http.ListenAndServe(":"+port, corsHandler.Handler(mux)); err != nil {
 		log.Fatal("Error starting server:", err)
 	}
-} 
+}
