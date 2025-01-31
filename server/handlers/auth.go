@@ -23,8 +23,8 @@ import (
 
 // AuthHandler handles authentication-related HTTP requests and manages user sessions
 type AuthHandler struct {
-	db        *database.DB // Database connection for user operations
-	jwtSecret string       // Secret key for JWT token signing
+	db          *database.DB // Database connection for user operations
+	jwtSecret   string       // Secret key for JWT token signing
 	authLimiter *middleware.RateLimiter
 }
 
@@ -59,8 +59,8 @@ func NewAuthHandler(db *database.DB, jwtSecret string) *AuthHandler {
 	authLimiter := middleware.NewRateLimiter(time.Minute, 5)
 
 	return &AuthHandler{
-		db: db,
-		jwtSecret: jwtSecret,
+		db:          db,
+		jwtSecret:   jwtSecret,
 		authLimiter: authLimiter,
 	}
 }
@@ -228,9 +228,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 
+	// Generate JTI (JWT ID) for token tracking
+	jti := uuid.New().String()
+
+	// Generate token fingerprint from User-Agent and IP
+	fingerprint := generateTokenFingerprint(r)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
+		"jti": jti,
+		"fgp": fingerprint, // Token binding fingerprint
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
@@ -293,9 +301,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 
+	// Generate JTI (JWT ID) for token tracking
+	jti := uuid.New().String()
+
+	// Generate token fingerprint from User-Agent and IP
+	fingerprint := generateTokenFingerprint(r)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
+		"jti": jti,
+		"fgp": fingerprint, // Token binding fingerprint
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
@@ -359,9 +375,17 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 
+	// Generate JTI (JWT ID) for token tracking
+	jti := uuid.New().String()
+
+	// Generate token fingerprint from User-Agent and IP
+	fingerprint := generateTokenFingerprint(r)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
+		"jti": jti,
+		"fgp": fingerprint, // Token binding fingerprint
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
@@ -471,6 +495,23 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)); err != nil {
 		log.Printf("[Auth] Current password is incorrect for user: %s", userID)
 		http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	// Invalidate all existing sessions for this user
+	// Invalidate all existing sessions when password is changed
+	// Convert string userID to UUID
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		log.Printf("[Auth] Error parsing userID to UUID: %v", err)
+		http.Error(w, "Invalid user ID format", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.db.InvalidateUserSessions(userUUID); err != nil {
+		log.Printf("[Auth] Error invalidating user sessions: %v", err)
+		// Return a more specific error message
+		http.Error(w, "Failed to invalidate existing sessions", http.StatusInternalServerError)
 		return
 	}
 
