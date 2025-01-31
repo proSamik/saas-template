@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import axios from '@/lib/axios'
-import Button from './Button'
+import { Button } from '@/components/Button'
 
 interface LinkedAccount {
   id: string
@@ -88,7 +88,7 @@ export default function LinkedAccounts() {
               <p className="text-sm text-gray-500">{account.email}</p>
             </div>
             <Button
-              variant="danger"
+              variant="default"
               onClick={() => handleUnlink(account.id)}
             >
               Unlink
