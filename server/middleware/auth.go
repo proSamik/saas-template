@@ -3,6 +3,8 @@ package middleware
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"strings"
@@ -72,6 +74,21 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 
 		// Extract claims and add user ID to context
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			// Validate token fingerprint
+			expectedFingerprint := generateTokenFingerprint(r)
+			tokenFingerprint, ok := claims["fgp"].(string)
+			if !ok || tokenFingerprint != expectedFingerprint {
+				http.Error(w, "Invalid token binding", http.StatusUnauthorized)
+				return
+			}
+
+			// Validate JTI claim
+			jti, ok := claims["jti"].(string)
+			if !ok || jti == "" {
+				http.Error(w, "Invalid token ID", http.StatusUnauthorized)
+				return
+			}
+
 			// Update session activity
 			if err := m.db.UpdateSessionActivity(tokenString); err != nil {
 				log.Printf("Error updating session activity: %v", err)
@@ -92,4 +109,31 @@ func GetUserID(ctx context.Context) string {
 		return userID
 	}
 	return ""
+}
+
+// generateTokenFingerprint creates a unique fingerprint for token binding
+// using client-specific attributes like User-Agent and IP address
+func generateTokenFingerprint(r *http.Request) string {
+	// Get client IP, checking for proxy headers first
+	clientIP := r.Header.Get("X-Forwarded-For")
+	if clientIP == "" {
+		clientIP = r.Header.Get("X-Real-IP")
+	}
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+	}
+	// Remove port number if present
+	if i := strings.LastIndex(clientIP, ":"); i != -1 {
+		clientIP = clientIP[:i]
+	}
+
+	// Get User-Agent
+	userAgent := r.UserAgent()
+
+	// Combine values and hash
+	data := clientIP + "|" + userAgent
+	hash := sha256.Sum256([]byte(data))
+
+	// Return hex-encoded hash
+	return hex.EncodeToString(hash[:])
 }
