@@ -23,8 +23,8 @@ import (
 
 // AuthHandler handles authentication-related HTTP requests and manages user sessions
 type AuthHandler struct {
-	db          *database.DB // Database connection for user operations
-	jwtSecret   string       // Secret key for JWT token signing
+	db          database.DBInterface // Database connection for user operations
+	jwtSecret   string               // Secret key for JWT token signing
 	authLimiter *middleware.RateLimiter
 }
 
@@ -54,7 +54,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
-func NewAuthHandler(db *database.DB, jwtSecret string) *AuthHandler {
+func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
 	// Create rate limiter for auth endpoints - 5 attempts per minute
 	authLimiter := middleware.NewRateLimiter(time.Minute, 5)
 
@@ -249,7 +249,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(user.ID.String(), refreshToken, refreshExp); err != nil {
+	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
 		log.Printf("[Auth] Error generating refresh token: %v", err)
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
@@ -258,7 +258,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Auth] Registration successful for user: %s", user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		ID:           user.ID.String(),
+		ID:           user.ID,
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
@@ -270,26 +270,29 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // Login handles user authentication endpoint (POST /auth/login)
 // It validates credentials and issues access and refresh tokens
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Auth] Starting login process")
-
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[Auth] Invalid request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[Auth] Getting user by email: %s", req.Email)
+	if req.Email == "" {
+		http.Error(w, "Email is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Password == "" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+
 	user, err := h.db.GetUserByEmail(req.Email)
 	if err != nil {
-		log.Printf("[Auth] User not found: %s", req.Email)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	log.Printf("[Auth] Checking password for user: %s", user.ID)
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		log.Printf("[Auth] Invalid password for user: %s", user.ID)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
@@ -297,7 +300,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Get device info from user agent
 	deviceInfo := r.UserAgent()
 
-	log.Printf("[Auth] Generating JWT for user: %s", user.ID)
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 
@@ -311,34 +313,30 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
 		"jti": jti,
-		"fgp": fingerprint, // Token binding fingerprint
+		"fgp": fingerprint,
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
-		log.Printf("[Auth] Error generating token: %v", err)
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
 	}
 
 	// Create session record
 	if err := h.db.CreateSession(user.ID, tokenString, accessExp, deviceInfo); err != nil {
-		log.Printf("[Auth] Error creating session: %v", err)
 		http.Error(w, "Error creating session", http.StatusInternalServerError)
 		return
 	}
 
 	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(user.ID.String(), refreshToken, refreshExp); err != nil {
-		log.Printf("[Auth] Error generating refresh token: %v", err)
+	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[Auth] Login successful for user: %s", user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		ID:           user.ID.String(),
+		ID:           user.ID,
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
@@ -350,28 +348,32 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // GoogleAuth handles Google OAuth authentication endpoint (POST /auth/google)
 // It processes Google OAuth tokens and creates or updates user accounts
 func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Auth] Starting Google authentication process")
-
 	var req GoogleAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[Auth] Invalid request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[Auth] Checking if Google user exists: %s", req.User.Email)
+	if req.Token == "" {
+		http.Error(w, "Missing token", http.StatusBadRequest)
+		return
+	}
+
+	if req.User.Email == "" || req.User.Name == "" {
+		http.Error(w, "Missing user information", http.StatusBadRequest)
+		return
+	}
+
 	user, err := h.db.GetUserByEmail(req.User.Email)
 	if err != nil {
-		log.Printf("[Auth] Creating new Google user: %s", req.User.Email)
+		// Create new user if not found
 		user, err = h.db.CreateUser(req.User.Email, "", req.User.Name)
 		if err != nil {
-			log.Printf("[Auth] Error creating Google user: %v", err)
 			http.Error(w, "Failed to create user", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	log.Printf("[Auth] Generating JWT for Google user: %s", user.ID)
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 
@@ -385,27 +387,24 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
 		"jti": jti,
-		"fgp": fingerprint, // Token binding fingerprint
+		"fgp": fingerprint,
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
-		log.Printf("[Auth] Error generating token: %v", err)
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
 	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(user.ID.String(), refreshToken, refreshExp); err != nil {
-		log.Printf("[Auth] Error generating refresh token: %v", err)
+	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[Auth] Google authentication successful for user: %s", user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		ID:           user.ID.String(),
+		ID:           user.ID,
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
@@ -529,7 +528,7 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.InvalidateUserSessions(userUUID); err != nil {
+	if err := h.db.InvalidateAllUserSessions(userUUID.String()); err != nil {
 		log.Printf("[Auth] Error invalidating user sessions: %v", err)
 		http.Error(w, "Failed to invalidate existing sessions", http.StatusInternalServerError)
 		return
@@ -560,56 +559,63 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 // RefreshToken handles token refresh endpoint (POST /auth/refresh)
 // It validates the refresh token and issues new access and refresh tokens
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+	// Apply stricter rate limiting for refresh token endpoint - 3 attempts per 5 minutes
+	refreshLimiter := middleware.NewRateLimiter(5*time.Minute, 3)
+	handler := refreshLimiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 
-	var req RefreshTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+		var req RefreshTokenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
 
-	// Verify refresh token
-	userID, err := h.db.GetRefreshToken(req.RefreshToken)
-	if err != nil {
-		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
-		return
-	}
+		// Rest of the refresh token logic
+		// Verify refresh token
+		userID, err := h.db.GetRefreshToken(req.RefreshToken)
+		if err != nil {
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
 
-	// Delete the used refresh token
-	if err := h.db.DeleteRefreshToken(req.RefreshToken); err != nil {
-		log.Printf("[Auth] Error deleting refresh token: %v", err)
-	}
+		// Delete the used refresh token
+		if err := h.db.DeleteRefreshToken(req.RefreshToken); err != nil {
+			log.Printf("[Auth] Error deleting refresh token: %v", err)
+		}
 
-	// Generate new tokens
-	accessExp := time.Now().Add(15 * time.Minute)
-	refreshExp := time.Now().Add(7 * 24 * time.Hour)
+		// Generate new tokens
+		accessExp := time.Now().Add(15 * time.Minute)
+		refreshExp := time.Now().Add(7 * 24 * time.Hour)
 
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": userID,
-		"exp": accessExp.Unix(),
-	})
+		accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": userID,
+			"exp": accessExp.Unix(),
+		})
 
-	accessTokenString, err := accessToken.SignedString([]byte(h.jwtSecret))
-	if err != nil {
-		http.Error(w, "Error generating access token", http.StatusInternalServerError)
-		return
-	}
+		accessTokenString, err := accessToken.SignedString([]byte(h.jwtSecret))
+		if err != nil {
+			http.Error(w, "Error generating access token", http.StatusInternalServerError)
+			return
+		}
 
-	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(userID, refreshToken, refreshExp); err != nil {
-		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
-		return
-	}
+		refreshToken := uuid.New().String()
+		if err := h.db.CreateRefreshToken(userID, refreshToken, refreshExp); err != nil {
+			http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
+			return
+		}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(TokenResponse{
-		AccessToken:  accessTokenString,
-		RefreshToken: refreshToken,
-		ExpiresAt:    accessExp.Unix(),
-	})
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(TokenResponse{
+			AccessToken:  accessTokenString,
+			RefreshToken: refreshToken,
+			ExpiresAt:    accessExp.Unix(),
+		})
+	}))
+	handler.ServeHTTP(w, r)
+
 }
 
 // GetLinkedAccounts handles retrieving all linked accounts for a user (GET /auth/linked-accounts)
@@ -629,7 +635,7 @@ func (h *AuthHandler) GetLinkedAccounts(w http.ResponseWriter, r *http.Request) 
 	}
 	for i, account := range accounts {
 		response.Accounts[i] = models.LinkedAccountResponse{
-			ID:       account.ID.String(),
+			ID:       account.ID,
 			Provider: account.Provider,
 			Email:    account.Email,
 		}
@@ -674,7 +680,7 @@ func (h *AuthHandler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 	// Return the new linked account
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(models.LinkedAccountResponse{
-		ID:       account.ID.String(),
+		ID:       account.ID,
 		Provider: account.Provider,
 		Email:    account.Email,
 	})
@@ -700,26 +706,20 @@ func (h *AuthHandler) UnlinkAccount(w http.ResponseWriter, r *http.Request) {
 
 // RequestPasswordReset handles password reset request endpoint (POST /auth/reset-password/request)
 func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Auth] Starting password reset request")
 	if r.Method != http.MethodPost {
-		log.Printf("[Auth] Method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req RequestPasswordResetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[Auth] Invalid request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[Auth] Processing reset request for email: %s", req.Email)
-
 	// Get user by email
 	user, err := h.db.GetUserByEmail(req.Email)
 	if err != nil {
-		log.Printf("[Auth] User not found for email: %s", req.Email)
 		// Don't reveal whether the email exists
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -728,15 +728,12 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	log.Printf("[Auth] User found: %s", user.ID)
-
 	// Generate reset token
 	token := uuid.New().String()
 	expiresAt := time.Now().Add(1 * time.Hour)
 
 	// Save reset token
-	if err := h.db.CreatePasswordResetToken(user.ID.String(), token, expiresAt); err != nil {
-		log.Printf("[Auth] Error creating password reset token: %v", err)
+	if err := h.db.CreatePasswordResetToken(user.ID, token, expiresAt); err != nil {
 		http.Error(w, "Error creating password reset token", http.StatusInternalServerError)
 		return
 	}
@@ -774,7 +771,6 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid or expired reset token", http.StatusBadRequest)
 			return
 		}
-		log.Printf("[Auth] Error getting reset token: %v", err)
 		http.Error(w, "Error processing reset token", http.StatusInternalServerError)
 		return
 	}
@@ -782,25 +778,30 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("[Auth] Error hashing password: %v", err)
 		http.Error(w, "Error hashing password", http.StatusInternalServerError)
 		return
 	}
 
 	// Update password
 	if err := h.db.UpdatePassword(userID, string(hashedPassword)); err != nil {
-		log.Printf("[Auth] Error updating password: %v", err)
 		http.Error(w, "Error updating password", http.StatusInternalServerError)
 		return
 	}
 
 	// Mark token as used
 	if err := h.db.MarkPasswordResetTokenUsed(req.Token); err != nil {
-		log.Printf("[Auth] Error marking reset token as used: %v", err)
+		http.Error(w, "Error marking token as used", http.StatusInternalServerError)
+		return
+	}
+
+	// Invalidate all user sessions
+	if err := h.db.InvalidateAllUserSessions(userID); err != nil {
+		http.Error(w, "Error invalidating sessions", http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Password has been reset successfully",
+		"message": "Password updated successfully. Please log in again with your new password.",
 	})
 }
