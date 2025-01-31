@@ -4,13 +4,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"saas-server/database"
 	"saas-server/middleware"
+	"saas-server/models"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -87,6 +91,33 @@ type TokenResponse struct {
 	ExpiresAt    int64  `json:"expiresAt"`    // New access token expiration timestamp
 }
 
+// LinkedAccountsResponse represents the response for getting linked accounts
+type LinkedAccountsResponse struct {
+	Accounts []models.LinkedAccountResponse `json:"accounts"`
+}
+
+// LinkAccountRequest represents the request for linking a new account
+type LinkAccountRequest struct {
+	Provider string `json:"provider"`
+	Token    string `json:"token"`
+	User     struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Image string `json:"image"`
+	} `json:"user"`
+}
+
+// RequestPasswordResetRequest represents the request body for password reset request
+type RequestPasswordResetRequest struct {
+	Email string `json:"email"` // User's email address
+}
+
+// ResetPasswordRequest represents the request body for password reset
+type ResetPasswordRequest struct {
+	Token       string `json:"token"`       // Password reset token
+	NewPassword string `json:"newPassword"` // New password to set
+}
+
 // Register handles user registration endpoint (POST /auth/register)
 // It validates the request, checks for existing users, and creates a new user account
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +176,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
+	if err := h.db.CreateRefreshToken(user.ID.String(), refreshToken, refreshExp); err != nil {
 		log.Printf("[Auth] Error generating refresh token: %v", err)
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
@@ -154,7 +185,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Auth] Registration successful for user: %s", user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		ID:           user.ID,
+		ID:           user.ID.String(),
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
@@ -207,7 +238,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
+	if err := h.db.CreateRefreshToken(user.ID.String(), refreshToken, refreshExp); err != nil {
 		log.Printf("[Auth] Error generating refresh token: %v", err)
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
@@ -216,7 +247,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Auth] Login successful for user: %s", user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		ID:           user.ID,
+		ID:           user.ID.String(),
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
@@ -266,7 +297,7 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	refreshToken := uuid.New().String()
-	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
+	if err := h.db.CreateRefreshToken(user.ID.String(), refreshToken, refreshExp); err != nil {
 		log.Printf("[Auth] Error generating refresh token: %v", err)
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
@@ -275,7 +306,7 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Auth] Google authentication successful for user: %s", user.ID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
-		ID:           user.ID,
+		ID:           user.ID.String(),
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
@@ -442,5 +473,187 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		AccessToken:  accessTokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
+	})
+}
+
+// GetLinkedAccounts handles retrieving all linked accounts for a user (GET /auth/linked-accounts)
+func (h *AuthHandler) GetLinkedAccounts(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(string)
+
+	accounts, err := h.db.GetLinkedAccounts(userID)
+	if err != nil {
+		log.Printf("[Auth] Error getting linked accounts: %v", err)
+		http.Error(w, "Error getting linked accounts", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert to response type
+	response := LinkedAccountsResponse{
+		Accounts: make([]models.LinkedAccountResponse, len(accounts)),
+	}
+	for i, account := range accounts {
+		response.Accounts[i] = models.LinkedAccountResponse{
+			ID:       account.ID.String(),
+			Provider: account.Provider,
+			Email:    account.Email,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// LinkAccount handles linking a new authentication method to an existing account (POST /auth/link)
+func (h *AuthHandler) LinkAccount(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(string)
+
+	var req LinkAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Auth] Invalid request body: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if this provider/email is already linked to another account
+	existing, err := h.db.GetLinkedAccountByProviderEmail(req.Provider, req.User.Email)
+	if err != nil && err != database.ErrNotFound {
+		log.Printf("[Auth] Error checking existing linked account: %v", err)
+		http.Error(w, "Error checking existing linked account", http.StatusInternalServerError)
+		return
+	}
+	if existing != nil {
+		log.Printf("[Auth] Account already linked to another user: %s", req.User.Email)
+		http.Error(w, "Account already linked to another user", http.StatusConflict)
+		return
+	}
+
+	// Create the linked account
+	account, err := h.db.CreateLinkedAccount(userID, req.Provider, req.User.Email)
+	if err != nil {
+		log.Printf("[Auth] Error creating linked account: %v", err)
+		http.Error(w, "Error creating linked account", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the new linked account
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.LinkedAccountResponse{
+		ID:       account.ID.String(),
+		Provider: account.Provider,
+		Email:    account.Email,
+	})
+}
+
+// UnlinkAccount handles removing a linked authentication method (DELETE /auth/link/{id})
+func (h *AuthHandler) UnlinkAccount(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(string)
+	accountID := chi.URLParam(r, "id")
+
+	if err := h.db.DeleteLinkedAccount(accountID, userID); err != nil {
+		if err == database.ErrNotFound {
+			http.Error(w, "Linked account not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("[Auth] Error deleting linked account: %v", err)
+		http.Error(w, "Error deleting linked account", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RequestPasswordReset handles password reset request endpoint (POST /auth/reset-password/request)
+func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RequestPasswordResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get user by email
+	user, err := h.db.GetUserByEmail(req.Email)
+	if err != nil {
+		// Don't reveal whether the email exists
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "If your email is registered, you will receive a password reset link",
+		})
+		return
+	}
+
+	// Generate reset token
+	token := uuid.New().String()
+	expiresAt := time.Now().Add(1 * time.Hour)
+
+	// Save reset token
+	if err := h.db.CreatePasswordResetToken(user.ID.String(), token, expiresAt); err != nil {
+		log.Printf("[Auth] Error creating password reset token: %v", err)
+		http.Error(w, "Error creating password reset token", http.StatusInternalServerError)
+		return
+	}
+
+	// TODO: Send email with reset link
+	resetLink := fmt.Sprintf("%s/auth/reset-password?token=%s", os.Getenv("FRONTEND_URL"), token)
+	log.Printf("[Auth] Password reset link for %s: %s", user.Email, resetLink)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "If your email is registered, you will receive a password reset link",
+	})
+}
+
+// ResetPassword handles password reset endpoint (POST /auth/reset-password)
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get user ID from reset token
+	userID, err := h.db.GetPasswordResetToken(req.Token)
+	if err != nil {
+		if err == database.ErrNotFound {
+			http.Error(w, "Invalid or expired reset token", http.StatusBadRequest)
+			return
+		}
+		log.Printf("[Auth] Error getting reset token: %v", err)
+		http.Error(w, "Error processing reset token", http.StatusInternalServerError)
+		return
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("[Auth] Error hashing password: %v", err)
+		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		return
+	}
+
+	// Update password
+	if err := h.db.UpdatePassword(userID, string(hashedPassword)); err != nil {
+		log.Printf("[Auth] Error updating password: %v", err)
+		http.Error(w, "Error updating password", http.StatusInternalServerError)
+		return
+	}
+
+	// Mark token as used
+	if err := h.db.MarkPasswordResetTokenUsed(req.Token); err != nil {
+		log.Printf("[Auth] Error marking reset token as used: %v", err)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Password has been reset successfully",
 	})
 }

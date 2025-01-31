@@ -7,6 +7,7 @@ import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
+import LinkedAccounts from '@/components/LinkedAccounts'
 import api from '@/lib/axios'
 import toast from 'react-hot-toast'
 
@@ -208,6 +209,16 @@ export default function Settings() {
                     </div>
                   </div>
                 </div>
+
+                {/* Linked Accounts */}
+                <div className="mt-8">
+                  <div className="bg-light-background dark:bg-dark-background border border-light-accent dark:border-dark-accent rounded-lg shadow">
+                    <div className="p-6">
+                      <LinkedAccounts />
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
           </main>

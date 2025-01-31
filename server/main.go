@@ -65,6 +65,19 @@ func main() {
 	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.HandleFunc("/auth/google", authHandler.GoogleAuth)
 	mux.HandleFunc("/auth/refresh", authHandler.RefreshToken)
+	mux.HandleFunc("/auth/reset-password/request", authHandler.RequestPasswordReset)
+	mux.HandleFunc("/auth/reset-password", authHandler.ResetPassword)
+
+	// Account linking routes (protected)
+	mux.Handle("/auth/linked-accounts", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.GetLinkedAccounts)))
+	mux.Handle("/auth/link", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.LinkAccount)))
+	mux.Handle("/auth/link/", authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			authHandler.UnlinkAccount(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})))
 
 	// User routes (protected)
 	mux.Handle("/user/profile", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))

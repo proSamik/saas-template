@@ -30,6 +30,10 @@ declare module 'next-auth' {
   interface User {
     accessToken?: string
   }
+
+  interface SignInCallbackParams {
+    trigger?: 'signIn' | 'link'
+  }
 }
 
 // Extend the JWT type to include custom fields
@@ -46,6 +50,13 @@ interface AuthUser {
   email: string
   name: string
   token: string
+}
+
+// Type definition for linked accounts
+interface LinkedAccount {
+  id: string
+  provider: string
+  email: string
 }
 
 export const authConfig = {
@@ -84,7 +95,7 @@ export const authConfig = {
           }
         } catch (error: any) {
           console.error('[NextAuth] Login failed:', error.response?.data || error.message)
-          return null
+          throw new Error(error.response?.data?.message || 'Invalid credentials')
         }
       },
     }),
@@ -103,11 +114,38 @@ export const authConfig = {
   ],
   callbacks: {
     // Handle sign in process and validate with our API
-    async signIn({ user, account, profile }) {
+    async signIn(params: any) {
+      const { user, account, profile, trigger } = params
       console.log('[NextAuth] Sign in callback:', { 
         provider: account?.provider,
-        email: user.email 
+        email: user.email,
+        trigger
       })
+
+      // If this is a link operation, handle it differently
+      if (trigger === 'link') {
+        try {
+          console.log('[NextAuth] Linking account')
+          const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/link`, {
+            provider: account?.provider,
+            token: account?.id_token,
+            user: {
+              email: profile?.email,
+              name: profile?.name,
+              image: profile?.image
+            }
+          }, {
+            headers: {
+              'Authorization': `Bearer ${user.accessToken}`
+            }
+          })
+          
+          return true
+        } catch (error: any) {
+          console.error('[NextAuth] Account linking failed:', error.response?.data || error.message)
+          return false
+        }
+      }
 
       if (account?.provider === 'google') {
         try {
@@ -127,6 +165,7 @@ export const authConfig = {
             user.id = userData.id
             user.name = userData.name
             user.email = userData.email
+            user.accessToken = userData.token
             return true
           }
         } catch (error: any) {
@@ -161,6 +200,8 @@ export const authConfig = {
   pages: {
     signIn: '/auth/login',
     error: '/auth/error',
+    newUser: '/auth/signup',
+    verifyRequest: '/auth/verify-request',
   },
   debug: process.env.NODE_ENV === 'development',
 } satisfies NextAuthConfig

@@ -3,6 +3,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,10 +12,10 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID       string // Unique identifier for the user
-	Email    string // User's email address
-	Password string // Hashed password
-	Name     string // User's display name
+	ID       uuid.UUID // Unique identifier for the user
+	Email    string    // User's email address
+	Password string    // Hashed password
+	Name     string    // User's display name
 }
 
 // DB wraps the sql.DB connection and provides database operations
@@ -36,7 +37,7 @@ func New(dataSourceName string) (*DB, error) {
 
 // CreateUser creates a new user in the database with the given details
 func (db *DB) CreateUser(email, password, name string) (*User, error) {
-	id := uuid.New().String()
+	id := uuid.New()
 	query := `
 		INSERT INTO users (id, email, password, name)
 		VALUES ($1, $2, $3, $4)
@@ -92,42 +93,106 @@ func (db *DB) UserExists(email string) (bool, error) {
 
 // InitSchema creates the necessary database tables if they don't exist
 func (db *DB) InitSchema() error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id VARCHAR(36) PRIMARY KEY,
+	// Start a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %v", err)
+	}
+	defer tx.Rollback() // Rollback if we don't commit
+
+	// Drop existing tables if they exist
+	dropTables := `
+		DROP TABLE IF EXISTS password_reset_tokens CASCADE;
+		DROP TABLE IF EXISTS linked_accounts CASCADE;
+		DROP TABLE IF EXISTS refresh_tokens CASCADE;
+		DROP TABLE IF EXISTS users CASCADE;
+	`
+	if _, err := tx.Exec(dropTables); err != nil {
+		return fmt.Errorf("error dropping tables: %v", err)
+	}
+
+	// Create users table first
+	usersTable := `
+		CREATE TABLE users (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			email VARCHAR(255) UNIQUE NOT NULL,
 			password VARCHAR(255),
 			name VARCHAR(255) NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS refresh_tokens (
-			id VARCHAR(36) PRIMARY KEY,
-			user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		)`
+	if _, err := tx.Exec(usersTable); err != nil {
+		return fmt.Errorf("error creating users table: %v", err)
+	}
+
+	// Create refresh_tokens table
+	refreshTokensTable := `
+		CREATE TABLE refresh_tokens (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL,
 			token VARCHAR(255) UNIQUE NOT NULL,
 			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id)
-		)`,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`
+	if _, err := tx.Exec(refreshTokensTable); err != nil {
+		return fmt.Errorf("error creating refresh_tokens table: %v", err)
 	}
 
-	for _, query := range queries {
-		if _, err := db.Exec(query); err != nil {
-			return err
-		}
+	// Create linked_accounts table
+	linkedAccountsTable := `
+		CREATE TABLE linked_accounts (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL,
+			provider VARCHAR(50) NOT NULL,
+			email VARCHAR(255) NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			UNIQUE(user_id, provider),
+			UNIQUE(provider, email)
+		)`
+	if _, err := tx.Exec(linkedAccountsTable); err != nil {
+		return fmt.Errorf("error creating linked_accounts table: %v", err)
 	}
+
+	// Create password_reset_tokens table
+	passwordResetTokensTable := `
+		CREATE TABLE password_reset_tokens (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL,
+			token VARCHAR(255) UNIQUE NOT NULL,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			used_at TIMESTAMP WITH TIME ZONE,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`
+	if _, err := tx.Exec(passwordResetTokensTable); err != nil {
+		return fmt.Errorf("error creating password_reset_tokens table: %v", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %v", err)
+	}
+
 	return nil
 }
 
 // GetUserByID retrieves a user by their unique identifier
 func (db *DB) GetUserByID(id string) (*User, error) {
 	user := &User{}
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `
 		SELECT id, email, password, name
 		FROM users
 		WHERE id = $1`
 
-	err := db.QueryRow(query, id).Scan(
+	err = db.QueryRow(query, parsedID).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,
@@ -141,12 +206,17 @@ func (db *DB) GetUserByID(id string) (*User, error) {
 
 // UpdateUser updates a user's profile information in the database
 func (db *DB) UpdateUser(id, name, email string) error {
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return err
+	}
+
 	query := `
 		UPDATE users
 		SET name = $2, email = $3, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1`
 
-	result, err := db.Exec(query, id, name, email)
+	result, err := db.Exec(query, parsedID, name, email)
 	if err != nil {
 		return err
 	}
@@ -165,12 +235,17 @@ func (db *DB) UpdateUser(id, name, email string) error {
 
 // UpdatePassword updates a user's password in the database
 func (db *DB) UpdatePassword(id, hashedPassword string) error {
+	parsedID, err := uuid.Parse(id)
+	if err != nil {
+		return err
+	}
+
 	query := `
 		UPDATE users
 		SET password = $2, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1`
 
-	result, err := db.Exec(query, id, hashedPassword)
+	result, err := db.Exec(query, parsedID, hashedPassword)
 	if err != nil {
 		return err
 	}
@@ -189,24 +264,32 @@ func (db *DB) UpdatePassword(id, hashedPassword string) error {
 
 // CreateRefreshToken creates a new refresh token for a user with an expiration time
 func (db *DB) CreateRefreshToken(userID string, token string, expiresAt time.Time) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
 	query := `
 		INSERT INTO refresh_tokens (id, user_id, token, expires_at)
 		VALUES ($1, $2, $3, $4)`
 
-	_, err := db.Exec(query, uuid.New().String(), userID, token, expiresAt)
+	_, err = db.Exec(query, uuid.New(), parsedID, token, expiresAt)
 	return err
 }
 
 // GetRefreshToken retrieves a valid refresh token and returns the associated user ID
 func (db *DB) GetRefreshToken(token string) (string, error) {
-	var userID string
+	var userID uuid.UUID
 	query := `
 		SELECT user_id
 		FROM refresh_tokens
 		WHERE token = $1 AND expires_at > CURRENT_TIMESTAMP`
 
 	err := db.QueryRow(query, token).Scan(&userID)
-	return userID, err
+	if err != nil {
+		return "", err
+	}
+	return userID.String(), nil
 }
 
 // DeleteRefreshToken removes a refresh token from the database
