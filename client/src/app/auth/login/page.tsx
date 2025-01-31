@@ -18,6 +18,16 @@ export default function Login() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
+  const validatePassword = (password: string): string[] => {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push('Password must be at least 8 characters long');
+    if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter');
+    if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter');
+    if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number');
+    if (!/[^A-Za-z0-9]/.test(password)) errors.push('Password must contain at least one special character');
+    return errors;
+  };
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsLoading(true)
@@ -25,6 +35,13 @@ export default function Login() {
     const formData = new FormData(event.currentTarget)
     const email = formData.get('email') as string
     const password = formData.get('password') as string
+
+    const passwordErrors = validatePassword(password);
+    if (passwordErrors.length > 0) {
+      setIsLoading(false);
+      passwordErrors.forEach(error => toast.error(error));
+      return;
+    }
 
     console.log('[Login] Attempting login with email:', email)
 
@@ -165,4 +182,4 @@ export default function Login() {
       </div>
     </div>
   )
-} 
+}
