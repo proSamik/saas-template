@@ -55,7 +55,7 @@ func main() {
 
 	// Initialize handlers and middleware
 	authHandler := handlers.NewAuthHandler(db, os.Getenv("JWT_SECRET"))
-	authMiddleware := middleware.NewAuthMiddleware(os.Getenv("JWT_SECRET"))
+	authMiddleware := middleware.NewAuthMiddleware(db, os.Getenv("JWT_SECRET"))
 
 	// Create router
 	mux := http.NewServeMux()
