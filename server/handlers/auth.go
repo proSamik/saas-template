@@ -564,20 +564,26 @@ func (h *AuthHandler) UnlinkAccount(w http.ResponseWriter, r *http.Request) {
 
 // RequestPasswordReset handles password reset request endpoint (POST /auth/reset-password/request)
 func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[Auth] Starting password reset request")
 	if r.Method != http.MethodPost {
+		log.Printf("[Auth] Method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req RequestPasswordResetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Auth] Invalid request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("[Auth] Processing reset request for email: %s", req.Email)
+
 	// Get user by email
 	user, err := h.db.GetUserByEmail(req.Email)
 	if err != nil {
+		log.Printf("[Auth] User not found for email: %s", req.Email)
 		// Don't reveal whether the email exists
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{
@@ -585,6 +591,8 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 		})
 		return
 	}
+
+	log.Printf("[Auth] User found: %s", user.ID)
 
 	// Generate reset token
 	token := uuid.New().String()
@@ -599,7 +607,10 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 
 	// TODO: Send email with reset link
 	resetLink := fmt.Sprintf("%s/auth/reset-password?token=%s", os.Getenv("FRONTEND_URL"), token)
-	log.Printf("[Auth] Password reset link for %s: %s", user.Email, resetLink)
+	log.Printf("[Auth] ============================================")
+	log.Printf("[Auth] Password reset link for %s:", user.Email)
+	log.Printf("[Auth] %s", resetLink)
+	log.Printf("[Auth] ============================================")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
