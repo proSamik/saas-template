@@ -476,10 +476,26 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get token from Authorization header for later invalidation
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		log.Printf("[Auth] Missing Authorization header")
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+	tokenString := authHeader[7:] // Skip "Bearer " prefix
+
 	var req UpdatePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[Auth] Invalid request body for password update: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate new password strength
+	if err := validatePassword(req.NewPassword); err != nil {
+		log.Printf("[Auth] Invalid new password: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -498,9 +514,14 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Invalidate all existing sessions for this user
-	// Invalidate all existing sessions when password is changed
-	// Convert string userID to UUID
+	// Invalidate current session first
+	if err := h.db.InvalidateSession(tokenString); err != nil {
+		log.Printf("[Auth] Error invalidating current session: %v", err)
+		http.Error(w, "Failed to invalidate current session", http.StatusInternalServerError)
+		return
+	}
+
+	// Then invalidate all other sessions for this user
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		log.Printf("[Auth] Error parsing userID to UUID: %v", err)
@@ -510,7 +531,6 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.InvalidateUserSessions(userUUID); err != nil {
 		log.Printf("[Auth] Error invalidating user sessions: %v", err)
-		// Return a more specific error message
 		http.Error(w, "Failed to invalidate existing sessions", http.StatusInternalServerError)
 		return
 	}
@@ -533,7 +553,7 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[Auth] Password updated successfully for user: %s", userID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Password updated successfully",
+		"message": "Password updated successfully. Please log in again with your new password.",
 	})
 }
 
