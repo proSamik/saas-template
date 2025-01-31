@@ -9,14 +9,14 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID            string    `json:"id" db:"id"`              // Unique identifier for the user
-	Name          string    `json:"name" db:"name"`          // User's full name
-	Email         string    `json:"email" db:"email"`        // User's email address
-	Password      string    `json:"-" db:"password"`         // Hashed password (not exposed in JSON)
+	ID            string    `json:"id"`                                 // Unique identifier for the user
+	Email         string    `json:"email"`                              // User's email address
+	Password      string    `json:"password"`                           // Hashed password
+	Name          string    `json:"name"`                               // User's display name
 	EmailVerified bool      `json:"email_verified" db:"email_verified"` // Whether the email has been verified
-	Provider      string    `json:"provider" db:"provider"`   // Authentication provider (email, google, etc.)
-	CreatedAt     time.Time `json:"created_at" db:"created_at"` // When the user was created
-	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"` // When the user was last updated
+	Provider      string    `json:"provider" db:"provider"`             // Authentication provider (email, google, etc.)
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`         // When the user was created
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`         // When the user was last updated
 }
 
 // HashPassword hashes the user's password using bcrypt
@@ -42,4 +42,4 @@ type UserResponse struct {
 	EmailVerified bool      `json:"email_verified"` // Email verification status
 	Provider      string    `json:"provider"`       // Authentication provider
 	CreatedAt     time.Time `json:"created_at"`     // Account creation timestamp
-} 
+}
