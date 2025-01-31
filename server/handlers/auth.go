@@ -8,39 +8,53 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/markbates/goth/gothic"
-	"saas-server/models"
+	"saas-server/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
-	jwtSecret []byte // Secret key for JWT signing
+	db        *database.DB
+	jwtSecret string
 }
 
 // NewAuthHandler creates a new AuthHandler instance
-func NewAuthHandler(jwtSecret string) *AuthHandler {
+func NewAuthHandler(db *database.DB, jwtSecret string) *AuthHandler {
 	return &AuthHandler{
-		jwtSecret: []byte(jwtSecret),
+		db:        db,
+		jwtSecret: jwtSecret,
 	}
 }
 
 // RegisterRequest represents the request body for user registration
 type RegisterRequest struct {
-	Name     string `json:"name"`     // User's full name
-	Email    string `json:"email"`    // User's email address
-	Password string `json:"password"` // User's password (plain text)
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 // LoginRequest represents the request body for user login
 type LoginRequest struct {
-	Email    string `json:"email"`    // User's email address
-	Password string `json:"password"` // User's password
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 // AuthResponse represents the response body for successful authentication
 type AuthResponse struct {
-	Token string      `json:"token"` // JWT token
-	User  models.User `json:"user"`  // User information
+	ID    string `json:"id"`
+	Token string `json:"token"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// GoogleAuthRequest represents the request body for Google authentication
+type GoogleAuthRequest struct {
+	Token string `json:"token"`
+	User  struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+		Image string `json:"image"`
+	} `json:"user"`
 }
 
 // Register handles user registration
@@ -52,32 +66,38 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
-	user := &models.User{
-		ID:        uuid.New().String(),
-		Name:      req.Name,
-		Email:     req.Email,
-		Password:  req.Password,
-		Provider:  "email",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	// Check if user already exists
+	exists, err := h.db.UserExists(req.Email)
+	if err != nil {
+		http.Error(w, "Error checking user existence", http.StatusInternalServerError)
+		return
+	}
+	if exists {
+		http.Error(w, "User already exists", http.StatusConflict)
+		return
 	}
 
 	// Hash password
-	if err := user.HashPassword(); err != nil {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		return
+	}
+
+	// Create user
+	user, err := h.db.CreateUser(req.Email, string(hashedPassword), req.Name)
+	if err != nil {
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
-	// TODO: Save user to database
-
-	// Generate JWT with 7-day expiration
+	// Generate JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
-		"exp": time.Now().Add(time.Hour * 24 * 7).Unix(),
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	})
 
-	tokenString, err := token.SignedString(h.jwtSecret)
+	tokenString, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
@@ -85,13 +105,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(AuthResponse{
+		ID:    user.ID,
 		Token: tokenString,
-		User:  *user,
+		Name:  user.Name,
+		Email: user.Email,
 	})
 }
 
-// Login handles user login with email and password
-// POST /auth/login
+// Login handles user login
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -99,49 +120,76 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Get user from database by email
-	// For now, return error
-	http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-}
-
-// GoogleCallback handles the OAuth callback from Google
-// GET /auth/google/callback
-func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
-	user, err := gothic.CompleteUserAuth(w, r)
+	// Get user by email
+	user, err := h.db.GetUserByEmail(req.Email)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// TODO: Create or update user in database
-	// For now, just create a new user object
-	authUser := &models.User{
-		ID:        uuid.New().String(),
-		Name:      user.Name,
-		Email:     user.Email,
-		Provider:  "google",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	// Check password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
 	}
 
-	// Generate JWT with 7-day expiration
+	// Generate JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": authUser.ID,
-		"exp": time.Now().Add(time.Hour * 24 * 7).Unix(),
+		"sub": user.ID,
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	})
 
-	tokenString, err := token.SignedString(h.jwtSecret)
+	tokenString, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
 	}
 
-	// Redirect to frontend with token
-	http.Redirect(w, r, "http://localhost:3000/auth/callback?token="+tokenString, http.StatusTemporaryRedirect)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{
+		ID:    user.ID,
+		Token: tokenString,
+		Name:  user.Name,
+		Email: user.Email,
+	})
 }
 
-// GoogleAuth initiates Google OAuth flow
-// GET /auth/google
+// GoogleAuth handles Google authentication
 func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
-	gothic.BeginAuthHandler(w, r)
+	var req GoogleAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user exists
+	user, err := h.db.GetUserByEmail(req.User.Email)
+	if err != nil {
+		// Create new user if not exists
+		user, err = h.db.CreateUser(req.User.Email, "", req.User.Name)
+		if err != nil {
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Generate JWT
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": user.ID,
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(h.jwtSecret))
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{
+		ID:    user.ID,
+		Token: tokenString,
+		Name:  user.Name,
+		Email: user.Email,
+	})
 } 

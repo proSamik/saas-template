@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession, signOut } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ThemeToggle } from './ThemeToggle'
 import { Menu } from '@headlessui/react'
@@ -11,7 +12,13 @@ import { UserCircleIcon } from '@heroicons/react/24/outline'
  * with authentication state and theme toggle
  */
 export function Navigation() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false })
+    router.push('/')
+  }
 
   return (
     <nav className="border-b border-light-accent dark:border-dark-accent">
@@ -26,7 +33,7 @@ export function Navigation() {
           <div className="flex items-center gap-4">
             <ThemeToggle />
             
-            {session ? (
+            {status === 'loading' ? null : session ? (
               <Menu as="div" className="relative">
                 <Menu.Button className="flex items-center gap-2 rounded-md p-2 hover:bg-light-accent dark:hover:bg-dark-accent">
                   <UserCircleIcon className="h-6 w-6" />
@@ -49,7 +56,7 @@ export function Navigation() {
                     <Menu.Item>
                       {({ active }) => (
                         <button
-                          onClick={() => signOut()}
+                          onClick={handleSignOut}
                           className={`block w-full text-left px-4 py-2 text-sm ${
                             active ? 'bg-light-accent dark:bg-dark-accent' : ''
                           }`}
