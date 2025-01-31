@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 
 	"saas-server/database"
@@ -118,6 +119,26 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"newPassword"` // New password to set
 }
 
+// validatePassword checks if a password meets security requirements
+func validatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one number")
+	}
+	if !regexp.MustCompile(`[^A-Za-z0-9]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+	return nil
+}
+
 // Register handles user registration endpoint (POST /auth/register)
 // It validates the request, checks for existing users, and creates a new user account
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +148,20 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[Auth] Invalid request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate email format
+	if !regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`).MatchString(req.Email) {
+		log.Printf("[Auth] Invalid email format: %s", req.Email)
+		http.Error(w, "Invalid email format", http.StatusBadRequest)
+		return
+	}
+
+	// Validate password strength
+	if err := validatePassword(req.Password); err != nil {
+		log.Printf("[Auth] Invalid password: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
