@@ -21,6 +21,7 @@ export function ThemeProvider({
   children: React.ReactNode
 }) {
   const [theme, setTheme] = useState<Theme>('light')
+  const [mounted, setMounted] = useState(false)
 
   // Initialize theme from localStorage or system preference
   useEffect(() => {
@@ -28,17 +29,26 @@ export function ThemeProvider({
     const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     
     setTheme(savedTheme || systemTheme)
+    setMounted(true)
   }, [])
 
   // Update document class and localStorage when theme changes
   useEffect(() => {
-    document.documentElement.classList.remove('light', 'dark')
-    document.documentElement.classList.add(theme)
+    if (!mounted) return
+
+    const root = window.document.documentElement
+    root.classList.remove('light', 'dark')
+    root.classList.add(theme)
     localStorage.setItem('theme', theme)
-  }, [theme])
+  }, [theme, mounted])
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light')
+  }
+
+  // Prevent flash of incorrect theme
+  if (!mounted) {
+    return null
   }
 
   return (
