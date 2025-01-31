@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ThemeToggle } from './ThemeToggle'
 import { useState, useRef, useEffect } from 'react'
-import { UserCircleIcon } from '@heroicons/react/24/outline'
+import { UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 
 /**
  * Navigation component that displays the top navigation bar
@@ -34,6 +34,8 @@ export function Navigation() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
   return (
     <div className="fixed top-0 left-0 right-0 bg-light-background dark:bg-dark-background z-50 flex justify-center w-full mx-auto">
       <nav className="flex w-full max-w-7xl px-4 sm:px-6 lg:px-8 border-b border-light-accent dark:border-dark-accent">
@@ -47,8 +49,32 @@ export function Navigation() {
               SaaS Platform
             </Link>
 
-            {/* Navigation Links */}
+            {/* Desktop Navigation Links */}
             <div className="hidden md:flex space-x-6">
+              <button
+                onClick={() => {
+                  if (window.location.pathname === '/') {
+                    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
+                  } else {
+                    router.push('/#pricing')
+                  }
+                }}
+                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
+              >
+                Pricing
+              </button>
+              <button
+                onClick={() => {
+                  if (window.location.pathname === '/') {
+                    document.querySelector('#demo')?.scrollIntoView({ behavior: 'smooth' })
+                  } else {
+                    router.push('/#demo')
+                  }
+                }}
+                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
+              >
+                Demo
+              </button>
               {session && (
                 <Link
                   href="/dashboard"
@@ -60,11 +86,24 @@ export function Navigation() {
             </div>
           </div>
 
-          {/* Theme Toggle and Auth */}
+          {/* Theme Toggle, Auth, and Mobile Menu Button */}
           <div className="flex items-center gap-6">
             <ThemeToggle />
             
-            {status === 'loading' ? null : session ? (
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden rounded-md p-2 text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
+            >
+              {isMobileMenuOpen ? (
+                <XMarkIcon className="h-6 w-6" />
+              ) : (
+                <Bars3Icon className="h-6 w-6" />
+              )}
+            </button>
+            
+            {/* Auth Section */}
+            {session ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsOpen(!isOpen)}
@@ -117,7 +156,50 @@ export function Navigation() {
             )}
           </div>
         </div>
+
+        {/* Mobile menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden absolute top-16 inset-x-0 bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent">
+            <div className="space-y-1 px-4 py-4">
+              <button
+                onClick={() => {
+                  if (window.location.pathname === '/') {
+                    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
+                  } else {
+                    router.push('/#pricing')
+                  }
+                  setIsMobileMenuOpen(false)
+                }}
+                className="block w-full text-left px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
+              >
+                Pricing
+              </button>
+              <button
+                onClick={() => {
+                  if (window.location.pathname === '/') {
+                    document.querySelector('#demo')?.scrollIntoView({ behavior: 'smooth' })
+                  } else {
+                    router.push('/#demo')
+                  }
+                  setIsMobileMenuOpen(false)
+                }}
+                className="block w-full text-left px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
+              >
+                Demo
+              </button>
+              {session && (
+                <Link
+                  href="/dashboard"
+                  className="block px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Dashboard
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </nav>
     </div>
   )
-} 
+}
