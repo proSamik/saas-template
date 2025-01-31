@@ -17,6 +17,7 @@ import type { JWT } from 'next-auth/jwt'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import axios from 'axios'
+const crypto = require('crypto');
 
 // Extend the built-in session type to include custom fields
 declare module 'next-auth' {
@@ -107,7 +108,11 @@ export const authConfig = {
         params: {
           prompt: "consent",
           access_type: "offline",
-          response_type: "code"
+          response_type: "code",
+          state: require('crypto').randomBytes(32).toString('hex'), // Add CSRF protection
+          code_challenge_method: 'S256', // Enable PKCE
+          code_challenge: generateCodeChallenge(), // Add PKCE code challenge
+          scope: 'openid email profile' // Explicitly define required scopes
         }
       }
     }),
@@ -213,3 +218,13 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
 }) 
+
+// Add PKCE helper function
+function generateCodeChallenge() {
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto
+    .createHash('sha256')
+    .update(verifier)
+    .digest('base64url');
+  return challenge;
+}
