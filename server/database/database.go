@@ -100,20 +100,9 @@ func (db *DB) InitSchema() error {
 	}
 	defer tx.Rollback() // Rollback if we don't commit
 
-	// Drop existing tables if they exist
-	dropTables := `
-		DROP TABLE IF EXISTS password_reset_tokens CASCADE;
-		DROP TABLE IF EXISTS linked_accounts CASCADE;
-		DROP TABLE IF EXISTS refresh_tokens CASCADE;
-		DROP TABLE IF EXISTS users CASCADE;
-	`
-	if _, err := tx.Exec(dropTables); err != nil {
-		return fmt.Errorf("error dropping tables: %v", err)
-	}
-
-	// Create users table first
+	// Create users table if it doesn't exist
 	usersTable := `
-		CREATE TABLE users (
+		CREATE TABLE IF NOT EXISTS users (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			email VARCHAR(255) UNIQUE NOT NULL,
 			password VARCHAR(255),
@@ -125,9 +114,9 @@ func (db *DB) InitSchema() error {
 		return fmt.Errorf("error creating users table: %v", err)
 	}
 
-	// Create refresh_tokens table
+	// Create refresh_tokens table if it doesn't exist
 	refreshTokensTable := `
-		CREATE TABLE refresh_tokens (
+		CREATE TABLE IF NOT EXISTS refresh_tokens (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL,
 			token VARCHAR(255) UNIQUE NOT NULL,
@@ -139,9 +128,9 @@ func (db *DB) InitSchema() error {
 		return fmt.Errorf("error creating refresh_tokens table: %v", err)
 	}
 
-	// Create linked_accounts table
+	// Create linked_accounts table if it doesn't exist
 	linkedAccountsTable := `
-		CREATE TABLE linked_accounts (
+		CREATE TABLE IF NOT EXISTS linked_accounts (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL,
 			provider VARCHAR(50) NOT NULL,
@@ -156,9 +145,9 @@ func (db *DB) InitSchema() error {
 		return fmt.Errorf("error creating linked_accounts table: %v", err)
 	}
 
-	// Create password_reset_tokens table
+	// Create password_reset_tokens table if it doesn't exist
 	passwordResetTokensTable := `
-		CREATE TABLE password_reset_tokens (
+		CREATE TABLE IF NOT EXISTS password_reset_tokens (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL,
 			token VARCHAR(255) UNIQUE NOT NULL,
@@ -169,6 +158,32 @@ func (db *DB) InitSchema() error {
 		)`
 	if _, err := tx.Exec(passwordResetTokensTable); err != nil {
 		return fmt.Errorf("error creating password_reset_tokens table: %v", err)
+	}
+
+	// Create sessions table if it doesn't exist
+	sessionsTable := `
+		CREATE TABLE IF NOT EXISTS sessions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL,
+			token TEXT NOT NULL UNIQUE,
+			last_activity TIMESTAMP WITH TIME ZONE NOT NULL,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			device_info TEXT,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`
+	if _, err := tx.Exec(sessionsTable); err != nil {
+		return fmt.Errorf("error creating sessions table: %v", err)
+	}
+
+	// Create token blacklist table if it doesn't exist
+	tokenBlacklistTable := `
+		CREATE TABLE IF NOT EXISTS token_blacklist (
+			token TEXT PRIMARY KEY,
+			invalidated_at TIMESTAMP WITH TIME ZONE NOT NULL
+		)`
+	if _, err := tx.Exec(tokenBlacklistTable); err != nil {
+		return fmt.Errorf("error creating token_blacklist table: %v", err)
 	}
 
 	// Commit the transaction
