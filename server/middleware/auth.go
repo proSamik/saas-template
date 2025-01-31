@@ -8,8 +8,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"saas-server/database"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -22,7 +24,7 @@ const UserIDKey contextKey = "userID"
 // AuthMiddleware handles JWT authentication for protected routes
 type AuthMiddleware struct {
 	db        *database.DB // Database connection for user operations
-	jwtSecret []byte      // Secret key for JWT signing and validation
+	jwtSecret []byte       // Secret key for JWT signing and validation
 }
 
 // NewAuthMiddleware creates a new AuthMiddleware instance
@@ -74,11 +76,21 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 
 		// Extract claims and add user ID to context
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			// Explicit expiration check
+			if exp, ok := claims["exp"].(float64); !ok || time.Now().Unix() > int64(exp) {
+				http.Error(w, "Token has expired", http.StatusUnauthorized)
+				return
+			}
+
 			// Validate token fingerprint
 			expectedFingerprint := generateTokenFingerprint(r)
 			tokenFingerprint, ok := claims["fgp"].(string)
 			if !ok || tokenFingerprint != expectedFingerprint {
-				http.Error(w, "Invalid token binding", http.StatusUnauthorized)
+				// Suspicious activity detected - rotate token
+				if err := m.db.InvalidateSession(tokenString); err != nil {
+					log.Printf("Error invalidating suspicious session: %v", err)
+				}
+				http.Error(w, "Invalid token binding - please reauthenticate", http.StatusUnauthorized)
 				return
 			}
 
