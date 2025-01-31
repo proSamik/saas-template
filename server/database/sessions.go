@@ -87,6 +87,45 @@ func (db *DB) GetActiveSessions(userID uuid.UUID) ([]Session, error) {
 	return sessions, rows.Err()
 }
 
+// InvalidateUserSessions invalidates all active sessions for a user
+func (db *DB) InvalidateUserSessions(userID uuid.UUID) error {
+	// Get all active sessions for the user
+	sessions, err := db.GetActiveSessions(userID)
+	if err != nil {
+		return err
+	}
+
+	// Start a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Blacklist all active tokens
+	for _, session := range sessions {
+		_, err = tx.Exec(`
+			INSERT INTO token_blacklist (token, invalidated_at)
+			VALUES ($1, CURRENT_TIMESTAMP)`,
+			session.Token)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	// Delete all sessions for the user
+	_, err = tx.Exec(`
+		DELETE FROM sessions
+		WHERE user_id = $1`,
+		userID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
 // CleanupExpiredSessions removes expired sessions and blacklisted tokens
 func (db *DB) CleanupExpiredSessions() error {
 	tx, err := db.Begin()
