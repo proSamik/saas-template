@@ -52,7 +52,6 @@ func main() {
 	if err := db.InitSchema(); err != nil {
 		log.Fatal("Error initializing schema:", err)
 	}
-
 	// Initialize handlers and middleware
 	authHandler := handlers.NewAuthHandler(db, os.Getenv("JWT_SECRET"))
 	authMiddleware := middleware.NewAuthMiddleware(db, os.Getenv("JWT_SECRET"))
