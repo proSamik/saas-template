@@ -1,44 +1,94 @@
+/**
+ * NextAuth configuration and setup for authentication
+ * 
+ * This module configures NextAuth.js for handling authentication in the application.
+ * It sets up:
+ * - Credentials provider for email/password login
+ * - Google OAuth provider for social login
+ * - Custom session and JWT type extensions
+ * - Authentication callbacks for sign in, JWT, and session handling
+ * - Custom error and login pages
+ */
+
 import NextAuth from 'next-auth'
-import type { Session, User, Account, Profile } from 'next-auth'
+import type { NextAuthConfig } from 'next-auth'
+import type { DefaultSession } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
-import type { DefaultSession, NextAuthConfig } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import axios from 'axios'
 
+// Extend the built-in session type to include custom fields
 declare module 'next-auth' {
-  interface Session extends DefaultSession {
+  interface Session {
     user: {
-      id: string
+      id: string | undefined
     } & DefaultSession['user']
+    accessToken?: string
+  }
+
+  interface User {
+    accessToken?: string
   }
 }
 
-const authOptions: NextAuthConfig = {
+// Extend the JWT type to include custom fields
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id?: string
+    accessToken?: string
+  }
+}
+
+// Type definition for the authentication response from our API
+interface AuthUser {
+  id: string
+  email: string
+  name: string
+  token: string
+}
+
+export const authConfig = {
   providers: [
+    // Email/password authentication provider
     CredentialsProvider({
-      name: 'credentials',
+      id: 'credentials',
+      name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
+      // Authorize user credentials against our API
       async authorize(credentials) {
+        console.log('[NextAuth] Attempting credentials login:', { email: credentials?.email })
+        
         if (!credentials?.email || !credentials?.password) {
-          throw new Error('Invalid credentials')
+          console.log('[NextAuth] Missing credentials')
+          return null
         }
 
         try {
+          console.log('[NextAuth] Making login request to API')
           const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
             email: credentials.email,
             password: credentials.password,
           })
 
-          return response.data
+          const userData = response.data as AuthUser
+          console.log('[NextAuth] Login successful:', { id: userData.id, email: userData.email })
+          return {
+            id: userData.id,
+            email: userData.email,
+            name: userData.name,
+            accessToken: userData.token
+          }
         } catch (error: any) {
-          throw new Error(error.response?.data?.message || 'Invalid credentials')
+          console.error('[NextAuth] Login failed:', error.response?.data || error.message)
+          return null
         }
       },
     }),
+    // Google OAuth provider configuration
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -52,9 +102,16 @@ const authOptions: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }: { user: User, account: Account | null, profile?: Profile }) {
+    // Handle sign in process and validate with our API
+    async signIn({ user, account, profile }) {
+      console.log('[NextAuth] Sign in callback:', { 
+        provider: account?.provider,
+        email: user.email 
+      })
+
       if (account?.provider === 'google') {
         try {
+          console.log('[NextAuth] Processing Google sign in')
           const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/google`, {
             token: account.id_token,
             user: {
@@ -64,31 +121,39 @@ const authOptions: NextAuthConfig = {
             }
           })
           
-          if (response.data) {
-            user.id = response.data.id
+          const userData = response.data as AuthUser
+          if (userData) {
+            console.log('[NextAuth] Google sign in successful:', { id: userData.id })
+            user.id = userData.id
+            user.name = userData.name
+            user.email = userData.email
             return true
           }
-          return false
-        } catch (error) {
-          console.error('Google sign in error:', error)
+        } catch (error: any) {
+          console.error('[NextAuth] Google sign in failed:', error.response?.data || error.message)
           return false
         }
       }
       return true
     },
-    async jwt({ token, user, account }: { token: JWT, user?: User, account?: Account | null }) {
-      if (account && user) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          id: user.id,
-        }
+    // Manage JWT token creation and updates
+    async jwt({ token, user, account }) {
+      console.log('[NextAuth] JWT callback:', { userId: user?.id, tokenId: token.id })
+      
+      if (user) {
+        token.id = user.id
+        token.accessToken = user.accessToken
+      }
+      if (account?.access_token) {
+        token.accessToken = account.access_token
       }
       return token
     },
-    async session({ session, token }: { session: Session, token: JWT }) {
-      if (session.user) {
-        session.user.id = token.id as string
+    // Handle session data and token synchronization
+    async session({ session, token }) {
+      if (session.user && token.id) {
+        session.user.id = token.id
+        session.accessToken = token.accessToken
       }
       return session
     },
@@ -97,12 +162,13 @@ const authOptions: NextAuthConfig = {
     signIn: '/auth/login',
     error: '/auth/error',
   },
-  session: {
-    strategy: 'jwt',
-  },
   debug: process.env.NODE_ENV === 'development',
-}
+} satisfies NextAuthConfig
 
-const handler = NextAuth(authOptions)
-
-export { handler as GET, handler as POST } 
+// Initialize and export NextAuth handlers and utilities
+export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  session: { strategy: 'jwt' },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development',
+}) 
