@@ -25,13 +25,18 @@ import (
 type AuthHandler struct {
 	db        *database.DB // Database connection for user operations
 	jwtSecret string       // Secret key for JWT token signing
+	authLimiter *middleware.RateLimiter
 }
 
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
 func NewAuthHandler(db *database.DB, jwtSecret string) *AuthHandler {
+	// Create rate limiter for auth endpoints - 5 attempts per minute
+	authLimiter := middleware.NewRateLimiter(time.Minute, 5)
+
 	return &AuthHandler{
-		db:        db,
+		db: db,
 		jwtSecret: jwtSecret,
+		authLimiter: authLimiter,
 	}
 }
 
