@@ -2,14 +2,12 @@ package models
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // LinkedAccount represents a connection between a user's different authentication methods
 type LinkedAccount struct {
-	ID        uuid.UUID `json:"id" db:"id"`                 // Unique identifier for the linked account
-	UserID    uuid.UUID `json:"user_id" db:"user_id"`       // ID of the main user account
+	ID        string    `json:"id" db:"id"`                 // Unique identifier for the linked account
+	UserID    string    `json:"user_id" db:"user_id"`       // ID of the main user account
 	Provider  string    `json:"provider" db:"provider"`     // Auth provider (google, email, etc)
 	Email     string    `json:"email" db:"email"`           // Email associated with this provider
 	CreatedAt time.Time `json:"created_at" db:"created_at"` // When the link was created
