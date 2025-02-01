@@ -22,7 +22,7 @@ type CheckoutRequest struct {
 }
 
 func NewCheckoutHandler() *CheckoutHandler {
-	apiKey := os.Getenv("LEMONSQUEEZY_API_KEY")
+	apiKey := os.Getenv("LEMON_SQUEEZY_API_KEY")
 	client := lemonsqueezy.New(lemonsqueezy.WithAPIKey(apiKey))
 	return &CheckoutHandler{client: client}
 }
@@ -40,8 +40,17 @@ func (h *CheckoutHandler) CreateCheckout(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Convert store ID and variant ID to integers
-	storeID, err := strconv.Atoi(os.Getenv("LEMONSQUEEZY_STORE_ID"))
+	// Get and validate required environment variables
+	storeIDStr := os.Getenv("LEMON_SQUEEZY_STORE_ID")
+	signingSecret := os.Getenv("LEMON_SQUEEZY_SIGNING_SECRET")
+
+	if storeIDStr == "" || signingSecret == "" {
+		http.Error(w, "Missing required environment configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert store ID to integer
+	storeID, err := strconv.Atoi(storeIDStr)
 	if err != nil {
 		http.Error(w, "Invalid store ID configuration", http.StatusInternalServerError)
 		return
