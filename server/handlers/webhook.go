@@ -75,9 +75,7 @@ type Database interface {
 	// Subscription operations
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
 	CreateSubscription(subscription *models.Subscription) error
-	UpdateSubscriptionDetails(subscriptionID string, variantID int, status string, cancelled bool, renewsAt *time.Time, endsAt *time.Time) error
-	UpdateSubscriptionStatus(subscriptionID string, status string, cancelled bool, pauseMode string, resumesAt *time.Time, endsAt *time.Time) error
-	UpdateSubscriptionPayment(subscriptionID string, status string, renewsAt *time.Time) error
+	UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 }
 
 type WebhookHandler struct {
@@ -292,77 +290,79 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_updated", "subscription_payment_success", "subscription_payment_recovered", "subscription_plan_changed":
 		log.Printf("[Webhook] Processing subscription update/payment/plan change")
-		// Update subscription details
-		err = h.DB.UpdateSubscriptionDetails(
+		// Update subscription using existing UpdateSubscription function
+		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
-			payload.Data.Attributes.FirstOrderItem.VariantID,
 			payload.Data.Attributes.Status,
 			payload.Data.Attributes.Cancelled,
+			payload.Data.Attributes.FirstOrderItem.VariantID,
 			payload.Data.Attributes.RenewsAt,
 			payload.Data.Attributes.EndsAt,
+			payload.Data.Attributes.TrialEndsAt,
 		)
-
-		// Update payment status if it's a payment event
-		if payload.Meta.EventName == "subscription_payment_success" ||
-			payload.Meta.EventName == "subscription_payment_recovered" {
-			err = h.DB.UpdateSubscriptionPayment(
-				payload.Data.ID,
-				payload.Data.Attributes.Status,
-				payload.Data.Attributes.RenewsAt,
-			)
-		}
 
 	case "subscription_cancelled", "subscription_expired":
 		log.Printf("[Webhook] Processing subscription cancellation/expiration")
-		// Update subscription status
-		err = h.DB.UpdateSubscriptionStatus(
+		// Update subscription status using existing UpdateSubscription function
+		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
 			payload.Data.Attributes.Status,
 			true,
-			"",
+			payload.Data.Attributes.FirstOrderItem.VariantID,
 			nil,
 			payload.Data.Attributes.EndsAt,
+			nil,
 		)
 
 	case "subscription_paused":
 		log.Printf("[Webhook] Processing subscription pause")
-		// Update subscription status to paused only
-		err = h.DB.UpdateSubscriptionStatus(
+		// Update subscription status using existing UpdateSubscription function
+		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
 			"paused",
 			false,
-			"",
+			payload.Data.Attributes.FirstOrderItem.VariantID,
+			nil,
 			nil,
 			nil,
 		)
 
 	case "subscription_unpaused", "subscription_resumed":
 		log.Printf("[Webhook] Processing subscription unpause/resume")
-		// Update subscription status
-		err = h.DB.UpdateSubscriptionStatus(
+		// Update subscription status using existing UpdateSubscription function
+		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
 			"active",
 			false,
-			"",
+			payload.Data.Attributes.FirstOrderItem.VariantID,
+			payload.Data.Attributes.RenewsAt,
 			nil,
 			nil,
 		)
 
 	case "subscription_payment_failed":
 		log.Printf("[Webhook] Processing failed payment")
-		// Update subscription payment status
-		err = h.DB.UpdateSubscriptionPayment(
+		// Update subscription status using existing UpdateSubscription function
+		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
 			"failed",
+			false,
+			payload.Data.Attributes.FirstOrderItem.VariantID,
+			nil,
+			nil,
 			nil,
 		)
 
 	case "subscription_payment_refunded":
 		log.Printf("[Webhook] Processing subscription payment refund")
-		// Update subscription payment status and handle refund
-		err = h.DB.UpdateSubscriptionPayment(
+		// Update subscription status using existing UpdateSubscription function
+		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
 			"refunded",
+			false,
+			payload.Data.Attributes.FirstOrderItem.VariantID,
+			nil,
+			nil,
 			nil,
 		)
 
