@@ -1,16 +1,30 @@
 package database
 
 import (
+	"fmt"
 	"saas-server/models"
+	"time"
 )
 
 // CreateOrder creates a new order record in the database
 func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error {
 	query := `
-		INSERT INTO orders (user_id, order_id, customer_id, product_id, variant_id, user_email, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		INSERT INTO orders (user_id, order_id, customer_id, product_id, variant_id, user_email, status, api_url)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
-	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID, userEmail, status)
+	apiURL := fmt.Sprintf("https://api.lemonsqueezy.com/v1/orders/%d", orderID)
+	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID, userEmail, status, apiURL)
+	return err
+}
+
+// UpdateOrderStatus updates the status and refund information of an order
+func (db *DB) UpdateOrderStatus(orderID int, status string, refunded bool, refundedAt *time.Time) error {
+	query := `
+		UPDATE orders 
+		SET status = $1, refunded_at = $2, updated_at = NOW()
+		WHERE order_id = $3`
+
+	_, err := db.Exec(query, status, refundedAt, orderID)
 	return err
 }
 
