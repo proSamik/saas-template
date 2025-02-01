@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"saas-server/database"
 	"saas-server/models"
 	"testing"
 	"time"
@@ -103,8 +102,8 @@ func (m *MockDB) CreateUser(email, password, name string) (*models.User, error) 
 }
 
 // Additional mock methods
-func (m *MockDB) CreateOrder(userID string, orderID, customerID, productID, totalPrice int, status string) error {
-	args := m.Called(userID, orderID, customerID, productID, totalPrice, status)
+func (m *MockDB) CreateOrder(userID string, orderID, customerID, productID, totalPrice int, status string, apiURL string) error {
+	args := m.Called(userID, orderID, customerID, productID, totalPrice, status, apiURL)
 	return args.Error(0)
 }
 
@@ -157,12 +156,20 @@ func (m *MockDB) MarkPasswordResetTokenUsed(token string) error {
 	return args.Error(0)
 }
 
-func (m *MockDB) GetUserOrders(userID string) ([]database.Order, error) {
+func (m *MockDB) GetUserOrders(userID string) ([]models.Orders, error) {
 	args := m.Called(userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]database.Order), args.Error(1)
+	return args.Get(0).([]models.Orders), args.Error(1)
+}
+
+func (m *MockDB) GetSubscriptionByUserID(userID string) (*models.Subscription, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Subscription), args.Error(1)
 }
 
 func TestLogin(t *testing.T) {
@@ -333,4 +340,14 @@ func mustHashPassword(password string) string {
 		panic(err)
 	}
 	return string(hash)
+}
+
+func (m *MockDB) CreateSubscription(subscription *models.Subscription) error {
+	args := m.Called(subscription)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
+	args := m.Called(subscriptionID, status, cancelled, variantID, renewsAt, endsAt, trialEndsAt)
+	return args.Error(0)
 }
