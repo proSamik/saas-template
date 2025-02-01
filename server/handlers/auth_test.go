@@ -47,6 +47,11 @@ func (m *MockDB) InvalidateSession(token string) error {
 	return args.Error(0)
 }
 
+func (m *MockDB) UpdateOrderRefund(orderID int, refundedAt *time.Time) error {
+	args := m.Called(orderID, refundedAt)
+	return args.Error(0)
+}
+
 func (m *MockDB) CreateRefreshToken(userID string, token string, expiresAt time.Time) error {
 	args := m.Called(userID, token, expiresAt)
 	return args.Error(0)
