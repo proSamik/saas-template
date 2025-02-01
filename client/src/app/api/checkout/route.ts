@@ -1,13 +1,31 @@
 import { NextResponse } from 'next/server';
 import { client } from '@/lib/lemons';
+import { auth } from '../auth/[...nextauth]/route';
+import { Session } from 'next-auth';
+
+type AuthSession = Session & {
+  user?: {
+    id: string;
+    email?: string;
+  };
+};
 
 export async function POST(request: Request) {
   try {
-    const { email, productId } = await request.json();
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    const variant = (
-      await client.listAllVariants({ productId })
-    ).data[0];
+    const { email, productId, variantId } = await request.json();
+
+    let variant;
+    if (variantId) {
+      variant = { id: variantId };
+    } else {
+      const variants = await client.listAllVariants({ productId });
+      variant = variants.data[0];
+    }
 
     if (!variant) {
       return NextResponse.json({ error: 'Product variant not found' }, { status: 404 });
@@ -18,6 +36,9 @@ export async function POST(request: Request) {
       variant: variant.id,
       checkout_data: {
         email,
+        custom: {
+          user_id: session.user.id
+        }
       },
     });
 
