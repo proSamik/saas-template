@@ -38,6 +38,11 @@ type DBInterface interface {
 	MarkPasswordResetTokenUsed(token string) error
 
 	// Order operations
-	CreateOrder(userID string, orderID int, customerID int, productID int, totalPrice int, status string) error
+	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error
 	GetUserOrders(userID string) ([]models.Orders, error)
+
+	// Subscription operations
+	CreateSubscription(subscription *models.Subscription) error
+	UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
 }
