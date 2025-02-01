@@ -86,8 +86,18 @@ func main() {
 	mux.Handle("/user/password", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdatePassword)))
 
 	// Payment webhook routes - initialize handler once for better resource management
-	webhookHandler := &handlers.Handler{DB: db}
+	webhookHandler := &handlers.WebhookHandler{DB: db}
 	mux.HandleFunc("/payment/webhook", webhookHandler.HandleWebhook)
+
+	// Product routes
+	productsHandler := handlers.NewProductsHandler()
+	mux.HandleFunc("/api/products", productsHandler.GetProducts)
+	mux.HandleFunc("/api/products/", productsHandler.GetProduct)
+	mux.HandleFunc("/api/products/store/", productsHandler.GetProductsByStore)
+
+	// Checkout routes
+	checkoutHandler := handlers.NewCheckoutHandler()
+	mux.HandleFunc("/api/checkout", checkoutHandler.CreateCheckout)
 
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
