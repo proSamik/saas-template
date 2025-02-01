@@ -48,10 +48,19 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize schema
+	// Initialize database schema
 	if err := db.InitSchema(); err != nil {
-		log.Fatal("Error initializing schema:", err)
+		log.Fatal("Error initializing database schema:", err)
 	}
+	log.Println("Database schema initialized successfully")
+
+	// Run database migrations
+	migrationManager := database.NewMigrationManager(db)
+	if err := migrationManager.RunMigrations(); err != nil {
+		log.Fatal("Error running migrations:", err)
+	}
+	log.Println("Database migrations applied successfully")
+
 	// Initialize handlers and middleware
 	authHandler := handlers.NewAuthHandler(db, os.Getenv("JWT_SECRET"))
 	authMiddleware := middleware.NewAuthMiddleware(db, os.Getenv("JWT_SECRET"))
@@ -82,11 +91,15 @@ func main() {
 	mux.Handle("/user/profile", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
 	mux.Handle("/user/password", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdatePassword)))
 
+	// Payment webhook routes - initialize handler once for better resource management
+	webhookHandler := &handlers.Handler{DB: db}
+	mux.HandleFunc("/payment/webhook", webhookHandler.HandleWebhook)
+
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{os.Getenv("CORS_ORIGIN")},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "x-signature"},
 		AllowCredentials: true,
 	})
 
