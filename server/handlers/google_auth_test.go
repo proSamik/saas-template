@@ -21,6 +21,7 @@ func TestGoogleAuth(t *testing.T) {
 		mockError      error
 		expectedStatus int
 		expectedError  string
+		orderCreated   bool
 	}{
 		{
 			name: "missing token",
@@ -103,6 +104,29 @@ func TestGoogleAuth(t *testing.T) {
 				Name:  "New User",
 			},
 			expectedStatus: http.StatusOK,
+			orderCreated:   true,
+		},
+		{
+			name: "successful registration of new user with order creation",
+			request: GoogleAuthRequest{
+				Token: "valid-token",
+				User: struct {
+					Email string `json:"email"`
+					Name  string `json:"name"`
+					Image string `json:"image"`
+				}{
+					Email: "new-with-order@example.com",
+					Name:  "New User With Order",
+					Image: "https://example.com/avatar.jpg",
+				},
+			},
+			newUser: &models.User{
+				ID:    "new-user-with-order-id",
+				Email: "new-with-order@example.com",
+				Name:  "New User With Order",
+			},
+			expectedStatus: http.StatusOK,
+			orderCreated:   true,
 		},
 		{
 			name: "error creating new user",
@@ -132,10 +156,16 @@ func TestGoogleAuth(t *testing.T) {
 				if tc.existingUser != nil {
 					mockDB.On("GetUserByEmail", tc.request.User.Email).Return(tc.existingUser, nil)
 					mockDB.On("CreateRefreshToken", tc.existingUser.ID, mock.Anything, mock.Anything).Return(nil)
+					if tc.orderCreated {
+						mockDB.On("CreateOrder", tc.existingUser.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+					}
 				} else if tc.newUser != nil {
 					mockDB.On("GetUserByEmail", tc.request.User.Email).Return(nil, ErrUserNotFound)
 					mockDB.On("CreateUser", tc.request.User.Email, "", tc.request.User.Name).Return(tc.newUser, nil)
 					mockDB.On("CreateRefreshToken", tc.newUser.ID, mock.Anything, mock.Anything).Return(nil)
+					if tc.orderCreated {
+						mockDB.On("CreateOrder", tc.newUser.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+					}
 				} else if tc.expectedError == "Failed to create user" {
 					mockDB.On("GetUserByEmail", tc.request.User.Email).Return(nil, ErrUserNotFound)
 					mockDB.On("CreateUser", tc.request.User.Email, "", tc.request.User.Name).Return(nil, assert.AnError)
