@@ -1,37 +1,26 @@
 package database
 
 import (
-	"time"
+	"saas-server/models"
 )
 
-type Order struct {
-	ID         int
-	UserID     string
-	OrderID    int
-	CustomerID int
-	ProductID  int
-	TotalPrice int
-	Status     string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-}
-
-func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, totalPrice int, status string) error {
+// CreateOrder creates a new order record in the database
+func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error {
 	query := `
-		INSERT INTO orders (user_id, order_id, customer_id, product_id, total_price, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`
-	_, err := db.Exec(query, userID, orderID, customerID, productID, totalPrice, status)
+		INSERT INTO orders (user_id, order_id, customer_id, product_id, variant_id, user_email, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID, userEmail, status)
 	return err
 }
 
-func (db *DB) GetUserOrders(userID string) ([]Order, error) {
+// GetUserOrders retrieves all orders for a given user
+func (db *DB) GetUserOrders(userID string) ([]models.Orders, error) {
 	query := `
-		SELECT id, user_id, order_id, customer_id, product_id, total_price, status, created_at, updated_at
+		SELECT id, user_id, order_id, customer_id, product_id, variant_id, user_email, status, created_at, updated_at, refunded_at
 		FROM orders
 		WHERE user_id = $1
-		ORDER BY created_at DESC
-	`
+		ORDER BY created_at DESC`
 
 	rows, err := db.Query(query, userID)
 	if err != nil {
@@ -39,19 +28,21 @@ func (db *DB) GetUserOrders(userID string) ([]Order, error) {
 	}
 	defer rows.Close()
 
-	var orders []Order
+	var orders []models.Orders
 	for rows.Next() {
-		var order Order
+		var order models.Orders
 		err := rows.Scan(
 			&order.ID,
 			&order.UserID,
 			&order.OrderID,
 			&order.CustomerID,
 			&order.ProductID,
-			&order.TotalPrice,
+			&order.VariantID,
+			&order.UserEmail,
 			&order.Status,
 			&order.CreatedAt,
 			&order.UpdatedAt,
+			&order.RefundedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -59,9 +50,5 @@ func (db *DB) GetUserOrders(userID string) ([]Order, error) {
 		orders = append(orders, order)
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return orders, nil
+	return orders, rows.Err()
 }
