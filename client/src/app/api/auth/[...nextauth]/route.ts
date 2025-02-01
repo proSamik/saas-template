@@ -88,12 +88,16 @@ export const authConfig = {
 
           const userData = response.data as AuthUser
           console.log('[NextAuth] Login successful:', { id: userData.id, email: userData.email })
-          return {
+          
+          // Explicitly set the id field in the returned user object
+          const user = {
             id: userData.id,
             email: userData.email,
             name: userData.name,
             accessToken: userData.token
           }
+          
+          return user
         } catch (error: any) {
           console.error('[NextAuth] Login failed:', error.response?.data || error.message)
           throw new Error(error.response?.data?.message || 'Invalid credentials')
@@ -127,10 +131,10 @@ export const authConfig = {
         trigger
       })
 
-      // If this is a link operation, handle it differently
+      // If this is a link operation, handle it as optional
       if (trigger === 'link') {
         try {
-          console.log('[NextAuth] Linking account')
+          console.log('[NextAuth] Attempting optional account linking')
           const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/link`, {
             provider: account?.provider,
             token: account?.id_token,
@@ -145,11 +149,17 @@ export const authConfig = {
             }
           })
           
-          return true
+          // Handle the response data for successful linking
+          const linkedAccount = response.data as LinkedAccount
+          if (linkedAccount && linkedAccount.id) {
+            console.log('[NextAuth] Account linked successfully:', { accountId: linkedAccount.id })
+          }
         } catch (error: any) {
-          console.error('[NextAuth] Account linking failed:', error.response?.data || error.message)
-          return false
+          // Log the error but continue with authentication
+          console.log('[NextAuth] Optional account linking skipped:', error.response?.data || error.message)
         }
+        // Always return true to continue authentication flow
+        return true
       }
 
       if (account?.provider === 'google') {
@@ -185,8 +195,9 @@ export const authConfig = {
       console.log('[NextAuth] JWT callback:', { userId: user?.id, tokenId: token.id })
       
       if (user) {
-        token.id = user.id
-        token.accessToken = user.accessToken
+        // Ensure user ID is properly set in the token
+        token.id = user.id || token.id
+        token.accessToken = user.accessToken || token.accessToken
       }
       if (account?.access_token) {
         token.accessToken = account.access_token
