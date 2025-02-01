@@ -31,17 +31,19 @@ func (c *Client) doRequest(method, path string, body interface{}) (*http.Respons
 	url := fmt.Sprintf("%s%s", baseURL, path)
 
 	var req *http.Request
+	var jsonBody []byte
 	var err error
-
+	var buf *bytes.Buffer
 	if body != nil {
-		jsonBody, err := json.Marshal(body)
+		jsonBody, err = json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		req, err = http.NewRequest(method, url, bytes.NewBuffer(jsonBody))
+		buf = bytes.NewBuffer(jsonBody)
 	} else {
-		req, err = http.NewRequest(method, url, nil)
+		buf = bytes.NewBuffer(nil)
 	}
+	req, err = http.NewRequest(method, url, buf)
 
 	if err != nil {
 		return nil, err
