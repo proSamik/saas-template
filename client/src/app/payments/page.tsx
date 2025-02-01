@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import api from '@/lib/axios';
 
 interface ProductAttributes {
   name: string;
@@ -38,35 +39,21 @@ const PaymentsPage = () => {
   const router = useRouter();
   const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map());
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        const response = await fetch('https://api.lemonsqueezy.com/v1/products', {
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_LEMONSQUEEZY_API_KEY}`,
-          },
-        });
-        const data: ProductsResponse = await response.json();
-        
-        // Fetch variants for each product
-        const productsWithVariants = await Promise.all(
-          data.data.map(async (product) => {
-            const variantsResponse = await fetch(`https://api.lemonsqueezy.com/v1/variants?filter[product_id]=${product.id}`, {
-              headers: {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${process.env.NEXT_PUBLIC_LEMONSQUEEZY_API_KEY}`,
-              },
-            });
-            const variantsData = await variantsResponse.json();
-            return { ...product, variants: variantsData.data };
-          })
-        );
-        
-        setProducts(productsWithVariants);
-      } catch (error) {
+        const { data } = await api.get<ProductsResponse>('/api/products');
+        setProducts(data.data);
+      } catch (error: any) {
         console.error('Error fetching products:', error);
+        setError(error?.response?.data?.message || 'Failed to load products. Please try again later.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -85,19 +72,12 @@ const PaymentsPage = () => {
       return newStates;
     });
     try {
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          productId,
-          variantId,
-          email: session?.user?.email,
-        }),
+      const { data } = await api.post('/api/checkout', {
+        productId,
+        variantId,
+        email: session?.user?.email,
       });
-  
-      const data = await response.json();
+      
       if (data.checkoutURL) {
         window.location.href = data.checkoutURL;
       }
