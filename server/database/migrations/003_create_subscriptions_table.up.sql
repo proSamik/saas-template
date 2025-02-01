@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     customer_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
     variant_id INTEGER NOT NULL,
-    order_item_id INTEGER NOT NULL,
+    order_item_id INTEGER,
     status VARCHAR(50) NOT NULL,
     cancelled BOOLEAN NOT NULL DEFAULT FALSE,
     api_url VARCHAR(255) NOT NULL,
