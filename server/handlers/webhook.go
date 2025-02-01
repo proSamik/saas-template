@@ -70,6 +70,7 @@ func validateWebhookSignature(payload []byte, signature string, secret string) b
 type Database interface {
 	// Order operations
 	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error
+	UpdateOrderRefund(orderID int, refundedAt *time.Time) error
 
 	// Subscription operations
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
@@ -354,6 +355,14 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			payload.Data.ID,
 			"failed",
 			nil,
+		)
+
+	case "order_refunded":
+		log.Printf("[Webhook] Processing order refund")
+		// Update order status and refund timestamp
+		err = h.DB.UpdateOrderRefund(
+			payload.Data.Attributes.OrderID,
+			payload.Data.Attributes.RefundedAt,
 		)
 
 	default:
