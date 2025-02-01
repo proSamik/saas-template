@@ -290,8 +290,8 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		err = h.DB.CreateSubscription(subscription)
 
-	case "subscription_updated", "subscription_payment_success", "subscription_payment_recovered":
-		log.Printf("[Webhook] Processing subscription update/payment")
+	case "subscription_updated", "subscription_payment_success", "subscription_payment_recovered", "subscription_plan_changed":
+		log.Printf("[Webhook] Processing subscription update/payment/plan change")
 		// Update subscription details
 		err = h.DB.UpdateSubscriptionDetails(
 			payload.Data.ID,
@@ -354,6 +354,15 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		err = h.DB.UpdateSubscriptionPayment(
 			payload.Data.ID,
 			"failed",
+			nil,
+		)
+
+	case "subscription_payment_refunded":
+		log.Printf("[Webhook] Processing subscription payment refund")
+		// Update subscription payment status and handle refund
+		err = h.DB.UpdateSubscriptionPayment(
+			payload.Data.ID,
+			"refunded",
 			nil,
 		)
 
