@@ -28,6 +28,17 @@ func (db *DB) UpdateOrderStatus(orderID int, status string, refunded bool, refun
 	return err
 }
 
+// UpdateOrderRefund updates the order's refund status and timestamp
+func (db *DB) UpdateOrderRefund(orderID int, refundedAt *time.Time) error {
+	query := `
+		UPDATE orders
+		SET status = 'refunded', refunded_at = $1, updated_at = NOW()
+		WHERE order_id = $2`
+
+	_, err := db.Exec(query, refundedAt, orderID)
+	return err
+}
+
 // GetUserOrders retrieves all orders for a given user
 func (db *DB) GetUserOrders(userID string) ([]models.Orders, error) {
 	query := `
