@@ -9,8 +9,11 @@ import (
 // CreateOrder creates a new order record in the database
 func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error {
 	query := `
-		INSERT INTO orders (user_id, order_id, customer_id, product_id, variant_id, user_email, status, api_url)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+		INSERT INTO orders (
+			user_id, order_id, customer_id, product_id, variant_id, 
+			user_email, status, api_url, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	apiURL := fmt.Sprintf("https://api.lemonsqueezy.com/v1/orders/%d", orderID)
 	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID, userEmail, status, apiURL)
