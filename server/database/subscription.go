@@ -63,7 +63,8 @@ func (db *DB) GetUserSubscriptionStatus(userID string) (*SubscriptionStatus, err
 	status.VariantID = variantID.String
 	if currentPeriodEnd.Valid {
 		status.CurrentPeriodEnd = currentPeriodEnd.Time
-		status.IsActive = time.Now().Before(currentPeriodEnd.Time)
+		// Add 24 hours (86400 seconds) to account for grace period
+		status.IsActive = time.Now().Before(currentPeriodEnd.Time.Add(24 * time.Hour))
 	}
 
 	return &status, nil

@@ -48,12 +48,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize database schema
-	if err := db.InitSchema(); err != nil {
-		log.Fatal("Error initializing database schema:", err)
-	}
-	log.Println("Database schema initialized successfully")
-
 	// Run database migrations
 	migrationManager := database.NewMigrationManager(db)
 	if err := migrationManager.RunMigrations(); err != nil {

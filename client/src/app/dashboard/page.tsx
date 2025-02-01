@@ -52,12 +52,6 @@ export default function Dashboard() {
 
       <div className="flex">
         <Sidebar />
-        <div className="flex-1 p-8">
-          <ManagementSubscription 
-            userId={session.user?.id || ''} 
-            isPro={isPro}
-          />
-
         {/* Main content */}
         <div className="flex flex-1 flex-col md:pl-64">
           <main className="flex-1">
@@ -66,6 +60,10 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
                   Welcome back, {session.user?.name}!
                 </h1>
+                <ManagementSubscription 
+                  userId={session.user?.id || ''} 
+                  isPro={isPro}
+                />
               </div>
               
               <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
@@ -108,7 +106,6 @@ export default function Dashboard() {
           </main>
         </div>
       </div>
-    </div>
     </div>
   )
 }

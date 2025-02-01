@@ -4,7 +4,6 @@ package database
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"saas-server/models"
 	"time"
 
@@ -35,16 +34,14 @@ func New(dataSourceName string) (*DB, error) {
 // CreateUser creates a new user in the database with the given details
 func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 	id := uuid.New().String()
-	userID := uuid.New().String()
 	query := `
-		INSERT INTO users (id, user_id, email, password, name)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, email, password, name`
+		INSERT INTO users (id, email, password, name)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, email, password, name`
 
 	var user models.User
-	err := db.QueryRow(query, id, userID, email, password, name).Scan(
+	err := db.QueryRow(query, id, email, password, name).Scan(
 		&user.ID,
-		&user.UserID,
 		&user.Email,
 		&user.Password,
 		&user.Name,
@@ -59,13 +56,12 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, user_id, email, password, name
+		SELECT id, email, password, name
 		FROM users
 		WHERE email = $1`
 
 	err := db.QueryRow(query, email).Scan(
 		&user.ID,
-		&user.UserID,
 		&user.Email,
 		&user.Password,
 		&user.Name,
@@ -80,13 +76,12 @@ func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 func (db *DB) GetUserByID(id string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, user_id, email, password, name
+		SELECT id, email, password, name
 		FROM users
 		WHERE id = $1`
 
 	err := db.QueryRow(query, id).Scan(
 		&user.ID,
-		&user.UserID,
 		&user.Email,
 		&user.Password,
 		&user.Name,
@@ -110,109 +105,6 @@ func (db *DB) UserExists(email string) (bool, error) {
 		return false, err
 	}
 	return exists, nil
-}
-
-// InitSchema creates the necessary database tables if they don't exist
-func (db *DB) InitSchema() error {
-	// Start a transaction
-	tx, err := db.Begin()
-	if err != nil {
-		return fmt.Errorf("error starting transaction: %v", err)
-	}
-	defer tx.Rollback() // Rollback if we don't commit
-
-	// Create users table if it doesn't exist
-	usersTable := `
-		CREATE TABLE IF NOT EXISTS users (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			email VARCHAR(255) UNIQUE NOT NULL,
-			password VARCHAR(255),
-			name VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)`
-	if _, err := tx.Exec(usersTable); err != nil {
-		return fmt.Errorf("error creating users table: %v", err)
-	}
-
-	// Create refresh_tokens table if it doesn't exist
-	refreshTokensTable := `
-		CREATE TABLE IF NOT EXISTS refresh_tokens (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			user_id UUID NOT NULL,
-			token VARCHAR(255) UNIQUE NOT NULL,
-			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		)`
-	if _, err := tx.Exec(refreshTokensTable); err != nil {
-		return fmt.Errorf("error creating refresh_tokens table: %v", err)
-	}
-
-	// Create linked_accounts table if it doesn't exist
-	linkedAccountsTable := `
-		CREATE TABLE IF NOT EXISTS linked_accounts (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			user_id UUID NOT NULL,
-			provider VARCHAR(50) NOT NULL,
-			email VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-			UNIQUE(user_id, provider),
-			UNIQUE(provider, email)
-		)`
-	if _, err := tx.Exec(linkedAccountsTable); err != nil {
-		return fmt.Errorf("error creating linked_accounts table: %v", err)
-	}
-
-	// Create password_reset_tokens table if it doesn't exist
-	passwordResetTokensTable := `
-		CREATE TABLE IF NOT EXISTS password_reset_tokens (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			user_id UUID NOT NULL,
-			token VARCHAR(255) UNIQUE NOT NULL,
-			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			used_at TIMESTAMP WITH TIME ZONE,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		)`
-	if _, err := tx.Exec(passwordResetTokensTable); err != nil {
-		return fmt.Errorf("error creating password_reset_tokens table: %v", err)
-	}
-
-	// Create sessions table if it doesn't exist
-	sessionsTable := `
-		CREATE TABLE IF NOT EXISTS sessions (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			user_id UUID NOT NULL,
-			token TEXT NOT NULL UNIQUE,
-			last_activity TIMESTAMP WITH TIME ZONE NOT NULL,
-			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-			device_info TEXT,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		)`
-	if _, err := tx.Exec(sessionsTable); err != nil {
-		return fmt.Errorf("error creating sessions table: %v", err)
-	}
-
-	// Create token blacklist table if it doesn't exist
-	tokenBlacklistTable := `
-		CREATE TABLE IF NOT EXISTS token_blacklist (
-			token TEXT PRIMARY KEY,
-			invalidated_at TIMESTAMP WITH TIME ZONE NOT NULL
-		)`
-	if _, err := tx.Exec(tokenBlacklistTable); err != nil {
-		return fmt.Errorf("error creating token_blacklist table: %v", err)
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error committing transaction: %v", err)
-	}
-
-	return nil
 }
 
 // UpdateUser updates a user's profile information in the database

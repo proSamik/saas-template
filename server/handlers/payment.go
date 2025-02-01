@@ -56,6 +56,12 @@ func (h *PaymentHandler) CancelSubscription(c *gin.Context) {
 		return
 	}
 
+	// Update local subscription status
+	if err := h.DB.UpdateSubscriptionStatus(status.SubscriptionID, true); err != nil {
+		c.JSON(http.StatusInternalServerError, subscriptionResponse{Message: "Failed to update subscription status"})
+		return
+	}
+
 	// Prepare request to Lemon Squeezy
 	lsReq := lemonSqueezyRequest{
 		Data: struct {
