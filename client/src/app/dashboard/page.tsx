@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
+import ManagementSubscription  from './ManagementSubscription'
 
 const stats = [
   { name: 'Total Projects', value: '12' },
@@ -42,12 +43,20 @@ export default function Dashboard() {
     return null
   }
 
+  // Check if user has an active subscription
+  const isPro = (session.user as any)?.subscription?.status === 'active' || false
+
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
       <Navigation />
 
       <div className="flex">
         <Sidebar />
+        <div className="flex-1 p-8">
+          <ManagementSubscription 
+            userId={session.user?.id || ''} 
+            isPro={isPro}
+          />
 
         {/* Main content */}
         <div className="flex flex-1 flex-col md:pl-64">
@@ -100,5 +109,6 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+    </div>
   )
-} 
+}
