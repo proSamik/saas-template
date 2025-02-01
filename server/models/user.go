@@ -10,6 +10,7 @@ import (
 // User represents a user in the system
 type User struct {
 	ID            string    `json:"id"`                                 // Unique identifier for the user
+	UserID        string    `json:"user_id" db:"user_id"`               // Public user identifier
 	Email         string    `json:"email"`                              // User's email address
 	Password      string    `json:"password"`                           // Hashed password
 	Name          string    `json:"name"`                               // User's display name
@@ -37,6 +38,7 @@ func (u *User) ComparePassword(password string) error {
 // UserResponse represents the user data that is safe to send to the client
 type UserResponse struct {
 	ID            string    `json:"id"`             // User's ID
+	UserID        string    `json:"user_id"`        // Public user identifier
 	Name          string    `json:"name"`           // User's name
 	Email         string    `json:"email"`          // User's email
 	EmailVerified bool      `json:"email_verified"` // Email verification status
