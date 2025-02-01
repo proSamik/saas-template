@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import toast from 'react-hot-toast';
 import api from '@/lib/axios';
 
 interface ProductAttributes {
@@ -12,11 +13,13 @@ interface ProductAttributes {
   price_formatted: string;
   thumb_url: string;
   status: string;
+  store_id: number;
 }
 
 interface Variant {
   id: string;
   attributes: {
+    status: string;
     name: string;
     price: number;
     price_formatted: string;
@@ -27,7 +30,14 @@ interface Product {
   type: string;
   id: string;
   attributes: ProductAttributes;
-  variants?: Variant[];
+  relationships: {
+    variants: {
+      data: Variant[];
+      links: {
+        href: string;
+      };
+    };
+  };
 }
 
 interface ProductsResponse {
@@ -62,7 +72,7 @@ const PaymentsPage = () => {
 
   const handleSubscribe = async (productId: string, variantId: string) => {
     if (!variantId) {
-      console.error('No variant ID available for product:', productId);
+      toast.error('This product is currently unavailable for purchase');
       return;
     }
 
@@ -76,13 +86,15 @@ const PaymentsPage = () => {
         productId,
         variantId,
         email: session?.user?.email,
+        userId: session?.user?.id,
       });
       
       if (data.checkoutURL) {
         window.location.href = data.checkoutURL;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
+      toast.error(error?.response?.data?.message || 'Failed to process checkout. Please try again.');
     } finally {
       setLoadingStates(prevStates => {
         const newStates = new Map(prevStates);
@@ -106,7 +118,10 @@ const PaymentsPage = () => {
       
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
         {products.map((product) => {
-          const productVariant = product.variants?.[0];
+                    const productVariant = product.relationships?.variants?.data 
+                    ? product.relationships.variants.data.find(variant => variant.attributes?.status === 'published') || null 
+                    : null;
+          const isAvailable = product.attributes.status === 'published' && productVariant !== null;
           return (
             <div key={product.id} className="rounded-lg border p-6 shadow-lg">
               {product.attributes.thumb_url && (
@@ -124,10 +139,17 @@ const PaymentsPage = () => {
               <p className="mb-6 text-2xl font-bold">{product.attributes.price_formatted}</p>
               <button
                 onClick={() => handleSubscribe(product.id, productVariant?.id || '')}
-                disabled={loadingStates.get(product.id) || !productVariant}
+                disabled={loadingStates.get(product.id) || !isAvailable}
                 className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {loadingStates.get(product.id) ? 'Processing...' : 'Subscribe Now'}
+                {loadingStates.get(product.id) 
+                  ? 'Processing...' 
+                  : !isAvailable
+                    ? 'Currently Unavailable'
+                    : product.attributes.price_formatted.includes('/month')
+                      ? 'Subscribe'
+                      : 'Order Now'
+                }
               </button>
             </div>
           );
