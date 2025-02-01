@@ -39,5 +39,5 @@ type DBInterface interface {
 
 	// Order operations
 	CreateOrder(userID string, orderID int, customerID int, productID int, totalPrice int, status string) error
-	GetUserOrders(userID string) ([]Order, error)
+	GetUserOrders(userID string) ([]models.Orders, error)
 }
