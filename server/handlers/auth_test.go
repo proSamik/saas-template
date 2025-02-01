@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"saas-server/database"
 	"saas-server/models"
 	"testing"
 	"time"
@@ -102,6 +103,11 @@ func (m *MockDB) CreateUser(email, password, name string) (*models.User, error) 
 }
 
 // Additional mock methods
+func (m *MockDB) CreateOrder(userID string, orderID, customerID, productID, totalPrice int, status string) error {
+	args := m.Called(userID, orderID, customerID, productID, totalPrice, status)
+	return args.Error(0)
+}
+
 func (m *MockDB) InvalidateAllUserSessions(userID string) error {
 	args := m.Called(userID)
 	return args.Error(0)
@@ -149,6 +155,14 @@ func (m *MockDB) GetPasswordResetToken(token string) (string, error) {
 func (m *MockDB) MarkPasswordResetTokenUsed(token string) error {
 	args := m.Called(token)
 	return args.Error(0)
+}
+
+func (m *MockDB) GetUserOrders(userID string) ([]database.Order, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]database.Order), args.Error(1)
 }
 
 func TestLogin(t *testing.T) {
