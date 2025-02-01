@@ -1,0 +1,21 @@
+-- Create orders table
+CREATE TABLE IF NOT EXISTS orders (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    user_email VARCHAR(255) NOT NULL,
+    customer_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    variant_id INTEGER NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    api_url VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    refunded_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Create indexes for frequently accessed columns
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
