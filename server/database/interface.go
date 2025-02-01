@@ -44,6 +44,6 @@ type DBInterface interface {
 
 	// Subscription operations
 	CreateSubscription(subscription *models.Subscription) error
-	UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, orderItemID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
 }
