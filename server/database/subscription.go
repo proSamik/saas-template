@@ -23,19 +23,20 @@ func (db *DB) CreateSubscription(subscription *models.Subscription) error {
 }
 
 // UpdateSubscription updates an existing subscription record
-func (db *DB) UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
+func (db *DB) UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, orderItemID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
 	query := `
 		UPDATE subscriptions 
 		SET status = $1,
 		    cancelled = $2,
 		    variant_id = $3,
-		    renews_at = $4,
-		    ends_at = $5,
-		    trial_ends_at = $6,
+		    order_item_id = $4,
+		    renews_at = $5,
+		    ends_at = $6,
+		    trial_ends_at = $7,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE subscription_id = $7
+		WHERE subscription_id = $8
 	`
-	_, err := db.Exec(query, status, cancelled, variantID, renewsAt, endsAt, trialEndsAt, subscriptionID)
+	_, err := db.Exec(query, status, cancelled, variantID, orderItemID, renewsAt, endsAt, trialEndsAt, subscriptionID)
 	return err
 }
 
