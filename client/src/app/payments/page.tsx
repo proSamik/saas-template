@@ -90,7 +90,7 @@ const PaymentsPage = () => {
       });
       
       if (data.checkoutURL) {
-        window.location.href = data.checkoutURL;
+        window.open(data.checkoutURL, '_blank');
       }
     } catch (error: any) {
       console.error('Error:', error);
