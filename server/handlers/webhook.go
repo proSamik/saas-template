@@ -22,25 +22,33 @@ type WebhookPayload struct {
 		Type       string `json:"type"`
 		ID         string `json:"id"`
 		Attributes struct {
-			StoreID    int    `json:"store_id"`
-			CustomerID int    `json:"customer_id"`
-			OrderID    int    `json:"order_id"`
-			ProductID  int    `json:"product_id"`
-			VariantID  int    `json:"variant_id"`
-			Status     string `json:"status"`
-			UserName   string `json:"user_name"`
-			UserEmail  string `json:"user_email"`
-			Cancelled  bool   `json:"cancelled"`
+			StoreID    int        `json:"store_id"`
+			CustomerID int        `json:"customer_id"`
+			OrderID    int        `json:"order_number"`
+			Status     string     `json:"status"`
+			UserName   string     `json:"user_name"`
+			UserEmail  string     `json:"user_email"`
+			Refunded   bool       `json:"refunded"`
+			RefundedAt *time.Time `json:"refunded_at"`
+			Cancelled  bool       `json:"cancelled"`
+			ProductID  int        `json:"product_id"`
 			Pause      *struct {
 				Mode      string     `json:"mode"`
 				ResumesAt *time.Time `json:"resumes_at"`
 			} `json:"pause"`
-			TrialEndsAt *time.Time `json:"trial_ends_at"`
-			RenewsAt    *time.Time `json:"renews_at"`
-			EndsAt      *time.Time `json:"ends_at"`
-			TotalPrice  float64    `json:"total"`
-			TotalUSD    float64    `json:"total_usd"`
+			TrialEndsAt    *time.Time `json:"trial_ends_at"`
+			RenewsAt       *time.Time `json:"renews_at"`
+			EndsAt         *time.Time `json:"ends_at"`
+			CreatedAt      time.Time  `json:"created_at"`
+			UpdatedAt      time.Time  `json:"updated_at"`
+			FirstOrderItem struct {
+				ProductID int `json:"product_id"`
+				VariantID int `json:"variant_id"`
+			} `json:"first_order_item"`
 		} `json:"attributes"`
+		Links struct {
+			Self string `json:"self"`
+		} `json:"links"`
 	} `json:"data"`
 	Meta struct {
 		EventName  string            `json:"event_name"`
@@ -248,8 +256,8 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			payload.Meta.CustomData["user_id"],
 			payload.Data.Attributes.OrderID,
 			payload.Data.Attributes.CustomerID,
-			payload.Data.Attributes.ProductID,
-			payload.Data.Attributes.VariantID,
+			payload.Data.Attributes.FirstOrderItem.ProductID,
+			payload.Data.Attributes.FirstOrderItem.VariantID,
 			payload.Data.Attributes.UserEmail,
 			payload.Data.Attributes.Status,
 		)
@@ -268,15 +276,16 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			UserID:         payload.Meta.CustomData["user_id"],
 			OrderID:        payload.Data.Attributes.OrderID,
 			CustomerID:     payload.Data.Attributes.CustomerID,
-			ProductID:      payload.Data.Attributes.ProductID,
-			VariantID:      payload.Data.Attributes.VariantID,
-			OrderItemID:    0, // TODO: Add order_item_id to webhook payload
-			Status:         "active",
-			Cancelled:      false,
-			APIURL:         fmt.Sprintf("https://api.lemonsqueezy.com/v1/subscriptions/%s", payload.Data.ID),
+			ProductID:      payload.Data.Attributes.FirstOrderItem.ProductID,
+			VariantID:      payload.Data.Attributes.FirstOrderItem.VariantID,
+			Status:         payload.Data.Attributes.Status,
+			Cancelled:      payload.Data.Attributes.Cancelled,
+			APIURL:         payload.Data.Links.Self,
 			RenewsAt:       payload.Data.Attributes.RenewsAt,
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
+			EndsAt:         payload.Data.Attributes.EndsAt,
+			TrialEndsAt:    payload.Data.Attributes.TrialEndsAt,
+			CreatedAt:      payload.Data.Attributes.CreatedAt,
+			UpdatedAt:      payload.Data.Attributes.UpdatedAt,
 		}
 		err = h.DB.CreateSubscription(subscription)
 
@@ -285,18 +294,19 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		// Update subscription details
 		err = h.DB.UpdateSubscriptionDetails(
 			payload.Data.ID,
-			payload.Data.Attributes.VariantID,
-			"active",
+			payload.Data.Attributes.FirstOrderItem.VariantID,
+			payload.Data.Attributes.Status,
 			payload.Data.Attributes.Cancelled,
 			payload.Data.Attributes.RenewsAt,
 			payload.Data.Attributes.EndsAt,
 		)
+
 		// Update payment status if it's a payment event
-		if err == nil && (payload.Meta.EventName == "subscription_payment_success" ||
-			payload.Meta.EventName == "subscription_payment_recovered") {
+		if payload.Meta.EventName == "subscription_payment_success" ||
+			payload.Meta.EventName == "subscription_payment_recovered" {
 			err = h.DB.UpdateSubscriptionPayment(
 				payload.Data.ID,
-				"paid",
+				payload.Data.Attributes.Status,
 				payload.Data.Attributes.RenewsAt,
 			)
 		}
@@ -315,19 +325,13 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_paused":
 		log.Printf("[Webhook] Processing subscription pause")
-		// Update subscription status with pause details
-		var pauseMode string
-		var resumesAt *time.Time
-		if payload.Data.Attributes.Pause != nil {
-			pauseMode = payload.Data.Attributes.Pause.Mode
-			resumesAt = payload.Data.Attributes.Pause.ResumesAt
-		}
+		// Update subscription status to paused only
 		err = h.DB.UpdateSubscriptionStatus(
 			payload.Data.ID,
 			"paused",
 			false,
-			pauseMode,
-			resumesAt,
+			"",
+			nil,
 			nil,
 		)
 
@@ -349,7 +353,7 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		err = h.DB.UpdateSubscriptionPayment(
 			payload.Data.ID,
 			"failed",
-			payload.Data.Attributes.RenewsAt,
+			nil,
 		)
 
 	default:
