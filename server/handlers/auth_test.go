@@ -352,7 +352,7 @@ func (m *MockDB) CreateSubscription(subscription *models.Subscription) error {
 	return args.Error(0)
 }
 
-func (m *MockDB) UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
+func (m *MockDB) UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, orderItemID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
 	args := m.Called(subscriptionID, status, cancelled, variantID, renewsAt, endsAt, trialEndsAt)
 	return args.Error(0)
 }
