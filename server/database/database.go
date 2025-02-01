@@ -35,14 +35,16 @@ func New(dataSourceName string) (*DB, error) {
 // CreateUser creates a new user in the database with the given details
 func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 	id := uuid.New().String()
+	userID := uuid.New().String()
 	query := `
-		INSERT INTO users (id, email, password, name)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, email, password, name`
+		INSERT INTO users (id, user_id, email, password, name)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, user_id, email, password, name`
 
 	var user models.User
-	err := db.QueryRow(query, id, email, password, name).Scan(
+	err := db.QueryRow(query, id, userID, email, password, name).Scan(
 		&user.ID,
+		&user.UserID,
 		&user.Email,
 		&user.Password,
 		&user.Name,
@@ -57,12 +59,34 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, email, password, name
+		SELECT id, user_id, email, password, name
 		FROM users
 		WHERE email = $1`
 
 	err := db.QueryRow(query, email).Scan(
 		&user.ID,
+		&user.UserID,
+		&user.Email,
+		&user.Password,
+		&user.Name,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserByID retrieves a user by their unique identifier
+func (db *DB) GetUserByID(id string) (*models.User, error) {
+	var user models.User
+	query := `
+		SELECT id, user_id, email, password, name
+		FROM users
+		WHERE id = $1`
+
+	err := db.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.UserID,
 		&user.Email,
 		&user.Password,
 		&user.Name,
@@ -189,26 +213,6 @@ func (db *DB) InitSchema() error {
 	}
 
 	return nil
-}
-
-// GetUserByID retrieves a user by their unique identifier
-func (db *DB) GetUserByID(id string) (*models.User, error) {
-	var user models.User
-	query := `
-		SELECT id, email, password, name
-		FROM users
-		WHERE id = $1`
-
-	err := db.QueryRow(query, id).Scan(
-		&user.ID,
-		&user.Email,
-		&user.Password,
-		&user.Name,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
 }
 
 // UpdateUser updates a user's profile information in the database
