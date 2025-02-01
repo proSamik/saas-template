@@ -36,4 +36,8 @@ type DBInterface interface {
 	CreatePasswordResetToken(userID string, token string, expiresAt time.Time) error
 	GetPasswordResetToken(token string) (string, error)
 	MarkPasswordResetTokenUsed(token string) error
+
+	// Order operations
+	CreateOrder(userID string, orderID int, customerID int, productID int, totalPrice int, status string) error
+	GetUserOrders(userID string) ([]Order, error)
 }
