@@ -13,10 +13,20 @@ interface ProductAttributes {
   status: string;
 }
 
+interface Variant {
+  id: string;
+  attributes: {
+    name: string;
+    price: number;
+    price_formatted: string;
+  };
+}
+
 interface Product {
   type: string;
   id: string;
   attributes: ProductAttributes;
+  variants?: Variant[];
 }
 
 interface ProductsResponse {
@@ -26,7 +36,7 @@ interface ProductsResponse {
 const PaymentsPage = () => {
   const { data: session } = useSession();
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map());
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
@@ -39,7 +49,22 @@ const PaymentsPage = () => {
           },
         });
         const data: ProductsResponse = await response.json();
-        setProducts(data.data);
+        
+        // Fetch variants for each product
+        const productsWithVariants = await Promise.all(
+          data.data.map(async (product) => {
+            const variantsResponse = await fetch(`https://api.lemonsqueezy.com/v1/variants?filter[product_id]=${product.id}`, {
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${process.env.NEXT_PUBLIC_LEMONSQUEEZY_API_KEY}`,
+              },
+            });
+            const variantsData = await variantsResponse.json();
+            return { ...product, variants: variantsData.data };
+          })
+        );
+        
+        setProducts(productsWithVariants);
       } catch (error) {
         console.error('Error fetching products:', error);
       }
@@ -48,8 +73,17 @@ const PaymentsPage = () => {
     fetchProducts();
   }, []);
 
-  const handleSubscribe = async (productId: string) => {
-    setLoading(true);
+  const handleSubscribe = async (productId: string, variantId: string) => {
+    if (!variantId) {
+      console.error('No variant ID available for product:', productId);
+      return;
+    }
+
+    setLoadingStates(prevStates => {
+      const newStates = new Map(prevStates);
+      newStates.set(productId, true);
+      return newStates;
+    });
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -58,6 +92,7 @@ const PaymentsPage = () => {
         },
         body: JSON.stringify({
           productId,
+          variantId,
           email: session?.user?.email,
         }),
       });
@@ -69,7 +104,11 @@ const PaymentsPage = () => {
     } catch (error) {
       console.error('Error:', error);
     } finally {
-      setLoading(false);
+      setLoadingStates(prevStates => {
+        const newStates = new Map(prevStates);
+        newStates.set(productId, false);
+        return newStates;
+      });
     }
   };
 
@@ -86,30 +125,33 @@ const PaymentsPage = () => {
       <h1 className="mb-8 text-3xl font-bold">Choose Your Plan</h1>
       
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-        {products.map((product) => (
-          <div key={product.id} className="rounded-lg border p-6 shadow-lg">
-            {product.attributes.thumb_url && (
-              <img 
-                src={product.attributes.thumb_url} 
-                alt={product.attributes.name}
-                className="mb-4 h-32 w-32 object-contain"
+        {products.map((product) => {
+          const productVariant = product.variants?.[0];
+          return (
+            <div key={product.id} className="rounded-lg border p-6 shadow-lg">
+              {product.attributes.thumb_url && (
+                <img 
+                  src={product.attributes.thumb_url} 
+                  alt={product.attributes.name}
+                  className="mb-4 h-32 w-32 object-contain"
+                />
+              )}
+              <h2 className="mb-4 text-xl font-semibold">{product.attributes.name}</h2>
+              <div 
+                className="mb-4 text-gray-600"
+                dangerouslySetInnerHTML={{ __html: product.attributes.description }}
               />
-            )}
-            <h2 className="mb-4 text-xl font-semibold">{product.attributes.name}</h2>
-            <div 
-              className="mb-4 text-gray-600"
-              dangerouslySetInnerHTML={{ __html: product.attributes.description }}
-            />
-            <p className="mb-6 text-2xl font-bold">{product.attributes.price_formatted}</p>
-            <button
-              onClick={() => handleSubscribe(product.id)}
-              disabled={loading}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Processing...' : 'Subscribe Now'}
-            </button>
-          </div>
-        ))}
+              <p className="mb-6 text-2xl font-bold">{product.attributes.price_formatted}</p>
+              <button
+                onClick={() => handleSubscribe(product.id, productVariant?.id || '')}
+                disabled={loadingStates.get(product.id) || !productVariant}
+                className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loadingStates.get(product.id) ? 'Processing...' : 'Subscribe Now'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
