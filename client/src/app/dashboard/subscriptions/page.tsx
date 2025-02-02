@@ -37,19 +37,24 @@ export default function Subscriptions() {
   }, [status, router])
 
   useEffect(() => {
-    if (session) {
-      api.get('/api/user/subscription')
-        .then(response => {
+    const fetchSubscription = async () => {
+      if (session?.user?.id && !session?.error) {
+        try {
+          const response = await api.get('/api/user/subscription')
           setSubscription(response.data || null)
-          setLoading(false)
-        })
-        .catch(error => {
+        } catch (error) {
           console.error('Error fetching subscription:', error)
           setSubscription(null)
+        } finally {
           setLoading(false)
-        })
+        }
+      } else {
+          setLoading(false)
+        }
     }
-  }, [session])
+
+    fetchSubscription()
+  }, [session?.user?.id, session?.error])
 
   if (status === 'loading' || loading) {
     return (
