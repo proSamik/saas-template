@@ -20,6 +20,7 @@ type DBInterface interface {
 	IsTokenBlacklisted(token string) (bool, error)
 	InvalidateSession(token string) error
 	InvalidateAllUserSessions(userID string) error
+	BlacklistToken(token string, expiresAt time.Time) error
 
 	// Refresh token operations
 	CreateRefreshToken(userID string, token string, expiresAt time.Time) error

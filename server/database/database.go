@@ -411,13 +411,33 @@ func (db *DB) MarkPasswordResetTokenUsed(token string) error {
 }
 
 // InvalidateSession marks a session as invalid (blacklists the token)
-func (db *DB) InvalidateSession(token string) error {
+func (db *DB) BlacklistToken(token string, expiresAt time.Time) error {
 	query := `
-		INSERT INTO token_blacklist (token, invalidated_at)
-		VALUES ($1, CURRENT_TIMESTAMP)`
+		INSERT INTO token_blacklist (token, invalidated_at, expires_at)
+		VALUES ($1, CURRENT_TIMESTAMP, $2)`
 
-	_, err := db.Exec(query, token)
+	_, err := db.Exec(query, token, expiresAt)
 	return err
+}
+
+func (db *DB) InvalidateSession(token string) error {
+	// Get token expiration time from sessions table
+	var expiresAt time.Time
+	query := `
+		SELECT expires_at
+		FROM sessions
+		WHERE token = $1`
+
+	err := db.QueryRow(query, token).Scan(&expiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	// Add token to blacklist
+	return db.BlacklistToken(token, expiresAt)
 }
 
 // IsTokenBlacklisted checks if a token has been invalidated

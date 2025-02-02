@@ -40,6 +40,29 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Remove "Bearer " prefix
 	tokenString := authHeader[7:] // Skip "Bearer " prefix
 
+	// Parse the token to get expiration time
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(h.jwtSecret), nil
+	})
+	if err != nil {
+		log.Printf("[Auth] Error parsing token: %v", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// Get expiration time from claims
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		log.Printf("[Auth] Invalid token claims")
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// Add token to blacklist
+	if err := h.db.BlacklistToken(tokenString, time.Unix(int64(claims["exp"].(float64)), 0)); err != nil {
+		log.Printf("[Auth] Error blacklisting token: %v", err)
+	}
+
 	// Invalidate the session
 	if err := h.db.InvalidateSession(tokenString); err != nil {
 		log.Printf("[Auth] Error invalidating session: %v", err)

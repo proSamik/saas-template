@@ -99,6 +99,11 @@ func main() {
 	checkoutHandler := handlers.NewCheckoutHandler()
 	mux.HandleFunc("/api/checkout", checkoutHandler.CreateCheckout)
 
+	// User data routes (protected)
+	userDataHandler := handlers.NewUserDataHandler(db)
+	mux.Handle("/api/user/orders", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserOrders)))
+	mux.Handle("/api/user/subscription", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserSubscription)))
+
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:   []string{os.Getenv("CORS_ORIGIN")},

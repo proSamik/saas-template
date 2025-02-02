@@ -42,6 +42,11 @@ func (m *MockDB) IsTokenBlacklisted(token string) (bool, error) {
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockDB) BlacklistToken(token string, expiresAt time.Time) error {
+	args := m.Called(token, expiresAt)
+	return args.Error(0)
+}
+
 func (m *MockDB) InvalidateSession(token string) error {
 	args := m.Called(token)
 	return args.Error(0)
