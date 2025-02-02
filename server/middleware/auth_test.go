@@ -179,12 +179,6 @@ func createTestToken(t *testing.T, userID string, expiry time.Time, secret strin
 		"sub": userID,
 		"exp": expiry.Unix(),
 		"jti": uuid.New().String(),
-		"fgp": generateTokenFingerprint(&http.Request{
-			Header: http.Header{
-				"User-Agent": []string{"test-agent"},
-			},
-			RemoteAddr: "127.0.0.1",
-		}),
 	})
 
 	tokenString, err := token.SignedString([]byte(secret))
