@@ -16,6 +16,10 @@ export async function POST(request: Request) {
       productId,
       variantId,
       userId
+    }, {
+      headers: {
+        'Authorization': `Bearer ${session.accessToken}`
+      }
     });
 
     return NextResponse.json({ checkoutURL: response.data.checkoutURL }, { status: 201 });
