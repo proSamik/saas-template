@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
-import ManagementSubscription  from './ManagementSubscription'
 
 const stats = [
   { name: 'Total Projects', value: '12' },
@@ -19,7 +18,12 @@ const stats = [
  * Protected route that requires authentication
  */
 export default function Dashboard() {
-  const { data: session, status } = useSession()
+  const { data: session, status } = useSession({
+    required: false,
+    onUnauthenticated() {
+      router.push('/auth/login')
+    }
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -43,9 +47,6 @@ export default function Dashboard() {
     return null
   }
 
-  // Check if user has an active subscription
-  const isPro = (session.user as any)?.subscription?.status === 'active' || false
-
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
       <Navigation />
@@ -60,10 +61,6 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
                   Welcome back, {session.user?.name}!
                 </h1>
-                <ManagementSubscription 
-                  userId={session.user?.id || ''} 
-                  isPro={isPro}
-                />
               </div>
               
               <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
