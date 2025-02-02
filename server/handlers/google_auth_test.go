@@ -24,7 +24,7 @@ func TestGoogleAuth(t *testing.T) {
 		orderCreated   bool
 	}{
 		{
-			name: "missing token",
+			name: "missing tokens",
 			request: GoogleAuthRequest{
 				User: struct {
 					Email string `json:"email"`
@@ -36,12 +36,13 @@ func TestGoogleAuth(t *testing.T) {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Missing token",
+			expectedError:  "Both access_token and id_token are required",
 		},
 		{
 			name: "missing user info",
 			request: GoogleAuthRequest{
-				Token: "valid-token",
+				AccessToken: "valid-access-token",
+				IDToken:     "valid-id-token",
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Missing user information",
@@ -49,7 +50,8 @@ func TestGoogleAuth(t *testing.T) {
 		{
 			name: "database error checking existing user",
 			request: GoogleAuthRequest{
-				Token: "valid-token",
+				AccessToken: "valid-access-token",
+				IDToken:     "valid-id-token",
 				User: struct {
 					Email string `json:"email"`
 					Name  string `json:"name"`
@@ -66,7 +68,8 @@ func TestGoogleAuth(t *testing.T) {
 		{
 			name: "successful login with existing user",
 			request: GoogleAuthRequest{
-				Token: "valid-token",
+				AccessToken: "valid-access-token",
+				IDToken:     "valid-id-token",
 				User: struct {
 					Email string `json:"email"`
 					Name  string `json:"name"`
@@ -87,7 +90,8 @@ func TestGoogleAuth(t *testing.T) {
 		{
 			name: "successful registration of new user",
 			request: GoogleAuthRequest{
-				Token: "valid-token",
+				AccessToken: "valid-access-token",
+				IDToken:     "valid-id-token",
 				User: struct {
 					Email string `json:"email"`
 					Name  string `json:"name"`
@@ -107,31 +111,10 @@ func TestGoogleAuth(t *testing.T) {
 			orderCreated:   true,
 		},
 		{
-			name: "successful registration of new user with order creation",
-			request: GoogleAuthRequest{
-				Token: "valid-token",
-				User: struct {
-					Email string `json:"email"`
-					Name  string `json:"name"`
-					Image string `json:"image"`
-				}{
-					Email: "new-with-order@example.com",
-					Name:  "New User With Order",
-					Image: "https://example.com/avatar.jpg",
-				},
-			},
-			newUser: &models.User{
-				ID:    "new-user-with-order-id",
-				Email: "new-with-order@example.com",
-				Name:  "New User With Order",
-			},
-			expectedStatus: http.StatusOK,
-			orderCreated:   true,
-		},
-		{
 			name: "error creating new user",
 			request: GoogleAuthRequest{
-				Token: "valid-token",
+				AccessToken: "valid-access-token",
+				IDToken:     "valid-id-token",
 				User: struct {
 					Email string `json:"email"`
 					Name  string `json:"name"`
@@ -152,9 +135,10 @@ func TestGoogleAuth(t *testing.T) {
 			mockDB := new(MockDB)
 
 			// Setup expectations
-			if tc.request.User.Email != "" && tc.request.Token != "" {
+			if tc.request.User.Email != "" {
 				if tc.existingUser != nil {
 					mockDB.On("GetUserByEmail", tc.request.User.Email).Return(tc.existingUser, nil)
+					mockDB.On("CreateSession", tc.existingUser.ID, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 					mockDB.On("CreateRefreshToken", tc.existingUser.ID, mock.Anything, mock.Anything).Return(nil)
 					if tc.orderCreated {
 						mockDB.On("CreateOrder", tc.existingUser.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -162,6 +146,7 @@ func TestGoogleAuth(t *testing.T) {
 				} else if tc.newUser != nil {
 					mockDB.On("GetUserByEmail", tc.request.User.Email).Return(nil, ErrUserNotFound)
 					mockDB.On("CreateUser", tc.request.User.Email, "", tc.request.User.Name).Return(tc.newUser, nil)
+					mockDB.On("CreateSession", tc.newUser.ID, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 					mockDB.On("CreateRefreshToken", tc.newUser.ID, mock.Anything, mock.Anything).Return(nil)
 					if tc.orderCreated {
 						mockDB.On("CreateOrder", tc.newUser.ID, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
