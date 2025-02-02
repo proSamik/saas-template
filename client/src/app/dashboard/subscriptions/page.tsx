@@ -40,10 +40,14 @@ export default function Subscriptions() {
     if (session) {
       api.get('/api/user/subscription')
         .then(response => {
-          setSubscription(response.data)
+          setSubscription(response.data || null)
           setLoading(false)
         })
-        .catch()
+        .catch(error => {
+          console.error('Error fetching subscription:', error)
+          setSubscription(null)
+          setLoading(false)
+        })
     }
   }, [session])
 
