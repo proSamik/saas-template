@@ -60,6 +60,17 @@ interface LinkedAccount {
   email: string
 }
 
+// Add server health check function
+async function checkServerHealth() {
+  try {
+    await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/health`)
+    return true
+  } catch (error) {
+    console.error('[NextAuth] Server health check failed:', error)
+    return false
+  }
+}
+
 export const authConfig = {
   providers: [
     // Email/password authentication provider
@@ -70,41 +81,32 @@ export const authConfig = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      // Authorize user credentials against our API
+      // Delegate authentication to server
       async authorize(credentials) {
-        console.log('[NextAuth] Attempting credentials login:', { email: credentials?.email })
-        
         if (!credentials?.email || !credentials?.password) {
-          console.log('[NextAuth] Missing credentials')
           return null
         }
 
         try {
-          console.log('[NextAuth] Making login request to API')
+          // Forward credentials to server for authentication
           const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
             email: credentials.email,
             password: credentials.password,
           })
 
           const userData = response.data as AuthUser
-          console.log('[NextAuth] Login successful:', { id: userData.id, email: userData.email })
-          
-          // Explicitly set the id field in the returned user object
-          const user = {
+          return {
             id: userData.id,
             email: userData.email,
             name: userData.name,
             accessToken: userData.token
           }
-          
-          return user
         } catch (error: any) {
-          console.error('[NextAuth] Login failed:', error.response?.data || error.message)
-          throw new Error(error.response?.data?.message || 'Invalid credentials')
+          throw new Error(error.response?.data?.message || 'Authentication failed')
         }
       },
     }),
-    // Google OAuth provider configuration
+    // Google OAuth provider configuration - Server handles the OAuth flow
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -113,60 +115,25 @@ export const authConfig = {
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
-          state: require('crypto').randomBytes(32).toString('hex'), // Add CSRF protection
-          code_challenge_method: 'S256', // Enable PKCE
-          code_challenge: generateCodeChallenge(), // Add PKCE code challenge
-          scope: 'openid email profile' // Explicitly define required scopes
+          scope: 'openid email profile'
         }
       }
     }),
   ],
   callbacks: {
-    // Handle sign in process and validate with our API
-    async signIn(params: any) {
-      const { user, account, profile, trigger } = params
-      console.log('[NextAuth] Sign in callback:', { 
-        provider: account?.provider,
-        email: user.email,
-        trigger
-      })
-
-      // If this is a link operation, handle it as optional
-      if (trigger === 'link') {
-        try {
-          console.log('[NextAuth] Attempting optional account linking')
-          const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/link`, {
-            provider: account?.provider,
-            token: account?.id_token,
-            user: {
-              email: profile?.email,
-              name: profile?.name,
-              image: profile?.image
-            }
-          }, {
-            headers: {
-              'Authorization': `Bearer ${user.accessToken}`
-            }
-          })
-          
-          // Handle the response data for successful linking
-          const linkedAccount = response.data as LinkedAccount
-          if (linkedAccount && linkedAccount.id) {
-            console.log('[NextAuth] Account linked successfully:', { accountId: linkedAccount.id })
-          }
-        } catch (error: any) {
-          // Log the error but continue with authentication
-          console.log('[NextAuth] Optional account linking skipped:', error.response?.data || error.message)
-        }
-        // Always return true to continue authentication flow
-        return true
-      }
-
+    async signIn({ user, account, profile }) {
       if (account?.provider === 'google') {
         try {
-          console.log('[NextAuth] Processing Google sign in')
+          // Ensure we have all required data before making the request
+          if (!account.access_token || !account.id_token) {
+            console.error('[NextAuth] Missing required OAuth tokens');
+            return false;
+          }
+
+          // Forward OAuth data to server for authentication and registration
           const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/google`, {
-            token: account.id_token,
+            access_token: account.access_token,
+            id_token: account.id_token,
             user: {
               email: profile?.email,
               name: profile?.name,
@@ -175,32 +142,46 @@ export const authConfig = {
           })
           
           const userData = response.data as AuthUser
-          if (userData) {
-            console.log('[NextAuth] Google sign in successful:', { id: userData.id })
+          if (userData && userData.id && userData.token) {
             user.id = userData.id
-            user.name = userData.name
-            user.email = userData.email
+            user.name = userData.name || profile?.name
+            user.email = userData.email || profile?.email
             user.accessToken = userData.token
             return true
           }
+          console.error('[NextAuth] Invalid user data received from server');
+          return false
         } catch (error: any) {
-          console.error('[NextAuth] Google sign in failed:', error.response?.data || error.message)
+          console.error('[NextAuth] Google authentication failed:', error.response?.data || error.message);
           return false
         }
       }
       return true
     },
     // Manage JWT token creation and updates
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       console.log('[NextAuth] JWT callback:', { userId: user?.id, tokenId: token.id })
       
       if (user) {
         // Ensure user ID is properly set in the token
         token.id = user.id || token.id
         token.accessToken = user.accessToken || token.accessToken
-      }
-      if (account?.access_token) {
-        token.accessToken = account.access_token
+      } else if (Date.now() > (token.exp || 0) * 1000) {
+        try {
+          // Token has expired, attempt to refresh
+          const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, {
+            refreshToken: token.refreshToken
+          })
+          
+          // Update token with new values
+          token.accessToken = response.data.token
+          token.refreshToken = response.data.refreshToken
+          token.exp = response.data.expiresAt
+        } catch (error) {
+          console.error('[NextAuth] Token refresh failed:', error)
+          // Token refresh failed, user needs to re-authenticate
+          return { ...token, error: 'RefreshAccessTokenError' }
+        }
       }
       return token
     },
@@ -208,7 +189,13 @@ export const authConfig = {
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id
+      }
+      if (token.accessToken) {
         session.accessToken = token.accessToken
+        // Add the token to the user object as well for better type safety
+        if (session.user) {
+          session.user.accessToken = token.accessToken
+        }
       }
       return session
     },
@@ -228,14 +215,4 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',
-}) 
-
-// Add PKCE helper function
-function generateCodeChallenge() {
-  const verifier = crypto.randomBytes(32).toString('base64url');
-  const challenge = crypto
-    .createHash('sha256')
-    .update(verifier)
-    .digest('base64url');
-  return challenge;
-}
+})
