@@ -163,7 +163,7 @@ func TestGoogleAuth(t *testing.T) {
 			// Create handler
 			handler := &AuthHandler{
 				db:        mockDB,
-				jwtSecret: "test-secret",
+				jwtSecret: []byte("test-secret"),
 			}
 
 			// Create request
