@@ -113,8 +113,9 @@ type AuthResponse struct {
 
 // GoogleAuthRequest represents the request body for Google OAuth authentication
 type GoogleAuthRequest struct {
-	Token string `json:"token"` // Google OAuth token
-	User  struct {
+	AccessToken string `json:"access_token"` // Google OAuth access token
+	IDToken     string `json:"id_token"`     // Google OAuth ID token
+	User        struct {
 		Email string `json:"email"` // User's Google email
 		Name  string `json:"name"`  // User's Google display name
 		Image string `json:"image"` // User's Google profile image URL
@@ -373,37 +374,49 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	var req GoogleAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Auth] Error decoding request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.Token == "" {
-		http.Error(w, "Missing token", http.StatusBadRequest)
+	// Enhanced logging for debugging
+	log.Printf("[Auth] Received Google auth request for email: %s", req.User.Email)
+
+	// Validate required fields with detailed error messages
+	if req.AccessToken == "" || req.IDToken == "" {
+		log.Printf("[Auth] Missing tokens - Access Token: %v, ID Token: %v", req.AccessToken != "", req.IDToken != "")
+		http.Error(w, "Both access_token and id_token are required", http.StatusBadRequest)
 		return
 	}
 
 	if req.User.Email == "" || req.User.Name == "" {
+		log.Printf("[Auth] Missing user info - Email: %v, Name: %v", req.User.Email != "", req.User.Name != "")
 		http.Error(w, "Missing user information", http.StatusBadRequest)
 		return
 	}
 
+	// Verify the user exists or create a new one with error handling
 	user, err := h.db.GetUserByEmail(req.User.Email)
 	if err != nil {
-		// Create new user if not found
-		user, err = h.db.CreateUser(req.User.Email, "", req.User.Name)
-		if err != nil {
-			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		if err == database.ErrNotFound || err.Error() == "sql: no rows in result set" {
+			log.Printf("[Auth] Creating new user for email: %s", req.User.Email)
+			user, err = h.db.CreateUser(req.User.Email, "", req.User.Name)
+			if err != nil {
+				log.Printf("[Auth] Failed to create user: %v", err)
+				http.Error(w, "Failed to create user", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			log.Printf("[Auth] Database error while checking user: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 	}
 
+	// Generate JWT token
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
-
-	// Generate JTI (JWT ID) for token tracking
 	jti := uuid.New().String()
-
-	// Generate token fingerprint from User-Agent and IP
 	fingerprint := generateTokenFingerprint(r)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -415,12 +428,22 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		log.Printf("[Auth] Error generating token: %v", err)
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Create session and refresh token
+	deviceInfo := r.UserAgent()
+	if err := h.db.CreateSession(user.ID, tokenString, accessExp, deviceInfo); err != nil {
+		log.Printf("[Auth] Error creating session: %v", err)
+		http.Error(w, "Error creating session", http.StatusInternalServerError)
 		return
 	}
 
 	refreshToken := uuid.New().String()
 	if err := h.db.CreateRefreshToken(user.ID, refreshToken, refreshExp); err != nil {
+		log.Printf("[Auth] Error generating refresh token: %v", err)
 		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
 		return
 	}
