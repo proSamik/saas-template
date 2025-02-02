@@ -4,6 +4,7 @@ package database
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"saas-server/models"
 	"time"
 
@@ -33,18 +34,39 @@ func New(dataSourceName string) (*DB, error) {
 
 // CreateUser creates a new user in the database with the given details
 func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
+	// Check if user already exists
+	exists, err := db.UserExists(email)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("user with email %s already exists", email)
+	}
+
 	id := uuid.New().String()
+	now := time.Now()
+
 	query := `
-		INSERT INTO users (id, email, password, name)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, email, password, name`
+		INSERT INTO users (id, email, password, name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, email, password, name, created_at, updated_at`
 
 	var user models.User
-	err := db.QueryRow(query, id, email, password, name).Scan(
+	err = db.QueryRow(
+		query,
+		id,
+		email,
+		password,
+		name,
+		now,
+		now,
+	).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,
 		&user.Name,
+		&user.CreatedAt,
+		&user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -56,7 +78,7 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, email, password, name
+		SELECT id, email, password, name, created_at, updated_at
 		FROM users
 		WHERE email = $1`
 
@@ -65,6 +87,8 @@ func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.Name,
+		&user.CreatedAt,
+		&user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -72,11 +96,46 @@ func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 	return &user, nil
 }
 
+// InvalidateSession invalidates a specific session token
+func (db *DB) InvalidateSession(token string) error {
+	query := `
+		UPDATE sessions
+		SET is_valid = false
+		WHERE token = $1`
+
+	result, err := db.Exec(query, token)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// InvalidateRefreshTokensForUser invalidates all refresh tokens for a specific user
+func (db *DB) InvalidateRefreshTokensForUser(userID string) error {
+	query := `
+		UPDATE refresh_tokens
+		SET is_valid = false
+		WHERE user_id = $1`
+
+	_, err := db.Exec(query, userID)
+	return err
+}
+
 // GetUserByID retrieves a user by their unique identifier
 func (db *DB) GetUserByID(id string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, email, password, name
+		SELECT id, email, password, name, created_at, updated_at
 		FROM users
 		WHERE id = $1`
 
@@ -85,6 +144,8 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.Name,
+		&user.CreatedAt,
+		&user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -165,50 +226,115 @@ func (db *DB) UpdatePassword(id, hashedPassword string) error {
 	return nil
 }
 
-// CreateRefreshToken creates a new refresh token for a user with an expiration time
-func (db *DB) CreateRefreshToken(userID string, token string, expiresAt time.Time) error {
-	parsedID, err := uuid.Parse(userID)
+// UpdateUserFields updates the provider fields for a user
+func (db *DB) UpdateUserFields(id string, emailVerified bool, provider string) error {
+	// Since email_verified is not in our schema, we'll ignore it
+	parsedID, err := uuid.Parse(id)
 	if err != nil {
 		return err
 	}
 
+	// We'll only update the timestamp since we don't have provider column either
 	query := `
-		INSERT INTO refresh_tokens (id, user_id, token, expires_at)
-		VALUES ($1, $2, $3, $4)`
+		UPDATE users
+		SET updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1`
 
-	_, err = db.Exec(query, uuid.New(), parsedID, token, expiresAt)
-	return err
+	result, err := db.Exec(query, parsedID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+// CreateRefreshToken creates a new refresh token for a user with an expiration time
+func (db *DB) CreateRefreshToken(userID string, token string, expiresAt time.Time) error {
+	query := `
+		UPDATE sessions
+		SET refresh_token = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = $2
+		AND status = 'active'
+		AND expires_at > CURRENT_TIMESTAMP`
+
+	result, err := db.Exec(query, token, userID)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
 
 // GetRefreshToken retrieves a valid refresh token and returns the associated user ID
 func (db *DB) GetRefreshToken(token string) (string, error) {
-	var userID uuid.UUID
+	var userID string
 	query := `
 		SELECT user_id
-		FROM refresh_tokens
-		WHERE token = $1 AND expires_at > CURRENT_TIMESTAMP`
+		FROM sessions
+		WHERE refresh_token = $1
+		AND status = 'active'
+		AND expires_at > CURRENT_TIMESTAMP`
 
 	err := db.QueryRow(query, token).Scan(&userID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", ErrNotFound
+		}
 		return "", err
 	}
-	return userID.String(), nil
+	return userID, nil
 }
 
 // DeleteRefreshToken removes a refresh token from the database
 func (db *DB) DeleteRefreshToken(token string) error {
-	query := `DELETE FROM refresh_tokens WHERE token = $1`
-	_, err := db.Exec(query, token)
-	return err
+	query := `
+		UPDATE sessions
+		SET refresh_token = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE refresh_token = $1
+		AND status = 'active'`
+
+	result, err := db.Exec(query, token)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
 
 // CreateSession creates a new session record
 func (db *DB) CreateSession(userID string, token string, expiresAt time.Time, deviceInfo string) error {
 	query := `
-		INSERT INTO sessions (id, user_id, token, last_activity, expires_at, device_info)
-		VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5)`
+		INSERT INTO sessions (id, user_id, access_token, refresh_token, status, last_activity, expires_at, device_info)
+		VALUES ($1, $2, $3, NULL, $4, CURRENT_TIMESTAMP, $5, $6)`
 
-	_, err := db.Exec(query, uuid.New().String(), userID, token, expiresAt, deviceInfo)
+	_, err := db.Exec(query, uuid.New().String(), userID, token, "active", expiresAt, deviceInfo)
 	return err
 }
 
@@ -216,10 +342,11 @@ func (db *DB) CreateSession(userID string, token string, expiresAt time.Time, de
 func (db *DB) InvalidateAllUserSessions(userID string) error {
 	// Get all active sessions for the user
 	query := `
-		SELECT token
+		SELECT access_token, expires_at
 		FROM sessions
 		WHERE user_id = $1
-		AND expires_at > CURRENT_TIMESTAMP`
+		AND expires_at > CURRENT_TIMESTAMP
+		AND status = 'active'`
 
 	rows, err := db.Query(query, userID)
 	if err != nil {
@@ -230,10 +357,11 @@ func (db *DB) InvalidateAllUserSessions(userID string) error {
 	// Invalidate each session
 	for rows.Next() {
 		var token string
-		if err := rows.Scan(&token); err != nil {
+		var expiresAt time.Time
+		if err := rows.Scan(&token, &expiresAt); err != nil {
 			return err
 		}
-		if err := db.InvalidateSession(token); err != nil {
+		if err := db.BlacklistToken(token, expiresAt); err != nil {
 			return err
 		}
 	}
@@ -411,46 +539,53 @@ func (db *DB) MarkPasswordResetTokenUsed(token string) error {
 }
 
 // InvalidateSession marks a session as invalid (blacklists the token)
+// BlacklistToken marks a session as invalid using the sessions table
 func (db *DB) BlacklistToken(token string, expiresAt time.Time) error {
 	query := `
-		INSERT INTO token_blacklist (token, invalidated_at, expires_at)
-		VALUES ($1, CURRENT_TIMESTAMP, $2)`
+		UPDATE sessions
+		SET status = 'invalid', updated_at = CURRENT_TIMESTAMP
+		WHERE access_token = $1 AND expires_at = $2`
 
 	_, err := db.Exec(query, token, expiresAt)
 	return err
 }
 
-func (db *DB) InvalidateSession(token string) error {
-	// Get token expiration time from sessions table
-	var expiresAt time.Time
+// IsSessionValid checks if a session is valid and not expired
+func (db *DB) IsSessionValid(token string) (bool, error) {
 	query := `
-		SELECT expires_at
-		FROM sessions
-		WHERE token = $1`
+		SELECT EXISTS(
+			SELECT 1
+			FROM sessions
+			WHERE access_token = $1
+			AND status = 'active'
+			AND expires_at > CURRENT_TIMESTAMP
+		)`
 
-	err := db.QueryRow(query, token).Scan(&expiresAt)
+	var valid bool
+	err := db.QueryRow(query, token).Scan(&valid)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return ErrNotFound
-		}
-		return err
+		return false, err
 	}
-
-	// Add token to blacklist
-	return db.BlacklistToken(token, expiresAt)
+	return valid, nil
 }
 
 // IsTokenBlacklisted checks if a token has been invalidated
 func (db *DB) IsTokenBlacklisted(token string) (bool, error) {
-	var exists bool
 	query := `
 		SELECT EXISTS(
-			SELECT 1 FROM token_blacklist
-			WHERE token = $1
+			SELECT 1
+			FROM sessions
+			WHERE access_token = $1
+			AND status = 'invalid'
+			AND expires_at > CURRENT_TIMESTAMP
 		)`
 
-	err := db.QueryRow(query, token).Scan(&exists)
-	return exists, err
+	var blacklisted bool
+	err := db.QueryRow(query, token).Scan(&blacklisted)
+	if err != nil {
+		return false, err
+	}
+	return blacklisted, nil
 }
 
 // UpdateSessionActivity updates the last activity timestamp for a session
@@ -458,7 +593,7 @@ func (db *DB) UpdateSessionActivity(token string) error {
 	query := `
 		UPDATE sessions
 		SET last_activity = CURRENT_TIMESTAMP
-		WHERE token = $1`
+		WHERE access_token = $1`
 
 	result, err := db.Exec(query, token)
 	if err != nil {
