@@ -8,12 +8,16 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create refresh_tokens table
-CREATE TABLE IF NOT EXISTS refresh_tokens (
+-- Create sessions table (consolidated with refresh tokens)
+CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
-    token VARCHAR(255) UNIQUE NOT NULL,
+    access_token TEXT UNIQUE,
+    refresh_token VARCHAR(255) UNIQUE,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    last_activity TIMESTAMP WITH TIME ZONE NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    device_info TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -40,22 +44,4 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     used_at TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Create sessions table
-CREATE TABLE IF NOT EXISTS sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    token TEXT NOT NULL UNIQUE,
-    last_activity TIMESTAMP WITH TIME ZONE NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    device_info TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Create token_blacklist table
-CREATE TABLE IF NOT EXISTS token_blacklist (
-    token TEXT PRIMARY KEY,
-    invalidated_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
