@@ -266,6 +266,13 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_cancelled", "subscription_expired":
 		log.Printf("[Webhook] Processing subscription cancellation/expiration")
+		// Determine the end date based on renewal schedule
+		var endDate *time.Time
+		if subscriptionAttrs.RenewsAt != nil && subscriptionAttrs.RenewsAt.After(time.Now()) {
+			endDate = subscriptionAttrs.RenewsAt
+		} else {
+			endDate = subscriptionAttrs.EndsAt
+		}
 		// Update subscription status using existing UpdateSubscription function
 		err = h.DB.UpdateSubscription(
 			payload.Data.ID,
@@ -274,7 +281,7 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			subscriptionAttrs.VariantID,
 			subscriptionAttrs.OrderItemID,
 			nil,
-			subscriptionAttrs.EndsAt,
+			endDate,
 			nil,
 		)
 		log.Printf("[Webhook] Processed subscription cancellation/expiration")
