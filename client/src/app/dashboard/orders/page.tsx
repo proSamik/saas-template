@@ -37,11 +37,12 @@ export default function Orders() {
     if (session) {
       api.get('/api/user/orders')
         .then(response => {
-          setOrders(response.data)
+          setOrders(response.data?.orders || [])
           setLoading(false)
         })
         .catch(error => {
           console.error('Error fetching orders:', error)
+          setOrders([])
           setLoading(false)
         })
     }
