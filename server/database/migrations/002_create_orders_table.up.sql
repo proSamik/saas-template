@@ -1,7 +1,7 @@
 -- Create orders table
 CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL,
+    order_id INTEGER NOT NULL UNIQUE,
     user_id VARCHAR(255) NOT NULL,
     user_email VARCHAR(255) NOT NULL,
     customer_id INTEGER NOT NULL,
