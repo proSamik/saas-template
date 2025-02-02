@@ -13,14 +13,17 @@ type DBInterface interface {
 	CreateUser(email, password, name string) (*models.User, error)
 	UpdateUser(id, name, email string) error
 	UpdatePassword(id, hashedPassword string) error
+	UpdateUserFields(id string, emailVerified bool, provider string) error
 	UserExists(email string) (bool, error)
 
 	// Session operations
 	CreateSession(userID string, token string, expiresAt time.Time, deviceInfo string) error
-	IsTokenBlacklisted(token string) (bool, error)
-	InvalidateSession(token string) error
+	IsSessionValid(token string) (bool, error)
+	UpdateSessionActivity(token string) error
 	InvalidateAllUserSessions(userID string) error
 	BlacklistToken(token string, expiresAt time.Time) error
+	InvalidateSession(token string) error
+	InvalidateRefreshTokensForUser(userID string) error
 
 	// Refresh token operations
 	CreateRefreshToken(userID string, token string, expiresAt time.Time) error
