@@ -11,6 +11,8 @@ import {
 const navigationItems = [
   { name: 'Home', href: '/dashboard', icon: HomeIcon },
   { name: 'Projects', href: '/dashboard/projects', icon: DocumentDuplicateIcon },
+  { name: 'Orders', href: '/dashboard/orders', icon: DocumentDuplicateIcon },
+  { name: 'Subscriptions', href: '/dashboard/subscriptions', icon: DocumentDuplicateIcon },
   { name: 'Settings', href: '/dashboard/settings', icon: CogIcon },
 ]
 
@@ -58,4 +60,4 @@ export function Sidebar() {
       </div>
     </div>
   )
-} 
+}
