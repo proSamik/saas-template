@@ -97,6 +97,11 @@ api.interceptors.request.use(async (config) => {
   return Promise.reject(error);
 });
 
+// Track retry attempts for each request
+const retryMap = new Map<string, number>();
+const maxRetries = 3;
+const backoffDelay = 1000; // Base delay in milliseconds
+
 // Add response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -106,6 +111,10 @@ api.interceptors.response.use(
     if (!originalRequest) {
       return Promise.reject(error);
     }
+
+    // Generate a unique key for the request
+    const requestKey = `${originalRequest.method}-${originalRequest.url}`;
+    const retryCount = retryMap.get(requestKey) || 0;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Check if the error indicates a blacklisted or invalid token
@@ -169,6 +178,21 @@ api.interceptors.response.use(
       }
     }
 
+    // Handle general request retries with exponential backoff
+    // Don't retry on connection errors or when server is unreachable
+    if (retryCount < maxRetries && 
+        error.response?.status !== 401 && 
+        error.code !== 'ERR_CONNECTION_RESET' && 
+        error.code !== 'ECONNABORTED') {
+      retryMap.set(requestKey, retryCount + 1);
+      const delay = Math.min(backoffDelay * Math.pow(2, retryCount), 10000); // Cap at 10 seconds
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return api(originalRequest);
+    }
+
+    // Reset retry count and reject the error
+    retryMap.delete(requestKey);
     return Promise.reject(error);
   }
 );
