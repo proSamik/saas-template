@@ -37,6 +37,11 @@ func (m *MockDB) CreateSession(userID string, token string, expiresAt time.Time,
 	return args.Error(0)
 }
 
+func (m *MockDB) IsSessionValid(token string) (bool, error) {
+	args := m.Called(token)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockDB) IsTokenBlacklisted(token string) (bool, error) {
 	args := m.Called(token)
 	return args.Bool(0), args.Error(1)
@@ -118,6 +123,11 @@ func (m *MockDB) CreateOrder(userID string, orderID, customerID, productID, tota
 }
 
 func (m *MockDB) InvalidateAllUserSessions(userID string) error {
+	args := m.Called(userID)
+	return args.Error(0)
+}
+
+func (m *MockDB) InvalidateRefreshTokensForUser(userID string) error {
 	args := m.Called(userID)
 	return args.Error(0)
 }
@@ -254,7 +264,7 @@ func TestLogin(t *testing.T) {
 			// Create handler with mock DB
 			handler := &AuthHandler{
 				db:        mockDB,
-				jwtSecret: "test-secret",
+				jwtSecret: []byte("test-secret"),
 			}
 
 			// Create request
@@ -359,5 +369,15 @@ func (m *MockDB) CreateSubscription(subscription *models.Subscription) error {
 
 func (m *MockDB) UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, orderItemID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
 	args := m.Called(subscriptionID, status, cancelled, variantID, renewsAt, endsAt, trialEndsAt)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateUserFields(id string, emailVerified bool, provider string) error {
+	args := m.Called(id, emailVerified, provider)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateSessionActivity(token string) error {
+	args := m.Called(token)
 	return args.Error(0)
 }
