@@ -12,7 +12,9 @@ import { UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outlin
  * with authentication state and theme toggle
  */
 export function Navigation() {
-  const { data: session, status } = useSession()
+  const { data: session, status } = useSession({
+    required: false
+  })
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
