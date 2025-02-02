@@ -24,11 +24,28 @@ import (
 // AuthHandler handles authentication-related HTTP requests and manages user sessions
 type AuthHandler struct {
 	db          database.DBInterface // Database connection for user operations
-	jwtSecret   string               // Secret key for JWT token signing
+	jwtSecret   []byte               // Secret key for JWT token signing
 	authLimiter *middleware.RateLimiter
 }
 
 // Logout handles user logout by invalidating the current session
+func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return h.jwtSecret, nil
+	})
+
+	if err != nil {
+		log.Printf("[Auth] Token validation error: %v", err)
+		return nil, err
+	}
+
+	return token, nil
+}
+
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Get token from Authorization header
 	authHeader := r.Header.Get("Authorization")
@@ -40,40 +57,32 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Remove "Bearer " prefix
 	tokenString := authHeader[7:] // Skip "Bearer " prefix
 
-	// Parse the token to get expiration time
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte(h.jwtSecret), nil
-	})
+	// Validate the token
+	token, err := h.validateToken(tokenString)
 	if err != nil {
-		log.Printf("[Auth] Error parsing token: %v", err)
+		log.Printf("[Auth] Error validating token during logout: %v", err)
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
 
-	// Get expiration time from claims
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		log.Printf("[Auth] Invalid token claims")
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
+	// Extract claims and invalidate session
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userID := claims["sub"].(string)
+		// Invalidate the session in the database
+		if err := h.db.InvalidateSession(tokenString); err != nil {
+			log.Printf("[Auth] Error invalidating session: %v", err)
+			http.Error(w, "Error invalidating session", http.StatusInternalServerError)
+			return
+		}
 
-	// Add token to blacklist
-	if err := h.db.BlacklistToken(tokenString, time.Unix(int64(claims["exp"].(float64)), 0)); err != nil {
-		log.Printf("[Auth] Error blacklisting token: %v", err)
-	}
-
-	// Invalidate the session
-	if err := h.db.InvalidateSession(tokenString); err != nil {
-		log.Printf("[Auth] Error invalidating session: %v", err)
-		http.Error(w, "Error invalidating session", http.StatusInternalServerError)
-		return
+		// Also invalidate the refresh token if it exists
+		if err := h.db.InvalidateRefreshTokensForUser(userID); err != nil {
+			log.Printf("[Auth] Error invalidating refresh tokens: %v", err)
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Successfully logged out",
-	})
+	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully logged out"})
 }
 
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
@@ -83,7 +92,7 @@ func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
 
 	return &AuthHandler{
 		db:          db,
-		jwtSecret:   jwtSecret,
+		jwtSecret:   []byte(jwtSecret),
 		authLimiter: authLimiter,
 	}
 }
@@ -255,17 +264,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Generate JTI (JWT ID) for token tracking
 	jti := uuid.New().String()
 
-	// Generate token fingerprint from User-Agent and IP
-	fingerprint := generateTokenFingerprint(r)
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
 		"jti": jti,
-		"fgp": fingerprint, // Token binding fingerprint
 	})
 
-	tokenString, err := token.SignedString([]byte(h.jwtSecret))
+	tokenString, err := token.SignedString(h.jwtSecret)
 	if err != nil {
 		log.Printf("[Auth] Error generating token: %v", err)
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
@@ -280,15 +285,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[Auth] Registration successful for user: %s", user.ID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{
+	response := AuthResponse{
 		ID:           user.ID,
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
 		Name:         user.Name,
 		Email:        user.Email,
-	})
+	}
+	log.Printf("[Auth] Registration response: %+v", response)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // Login handles user authentication endpoint (POST /auth/login)
@@ -330,14 +337,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Generate JTI (JWT ID) for token tracking
 	jti := uuid.New().String()
 
-	// Generate token fingerprint from User-Agent and IP
-	fingerprint := generateTokenFingerprint(r)
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
 		"jti": jti,
-		"fgp": fingerprint,
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
@@ -358,15 +361,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{
+	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
+	response := AuthResponse{
 		ID:           user.ID,
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
 		Name:         user.Name,
 		Email:        user.Email,
-	})
+	}
+	log.Printf("[Auth] Login response: %+v", response)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // GoogleAuth handles Google OAuth authentication endpoint (POST /auth/google)
@@ -400,11 +406,18 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == database.ErrNotFound || err.Error() == "sql: no rows in result set" {
 			log.Printf("[Auth] Creating new user for email: %s", req.User.Email)
+			// Create new user with Google provider and verified email
 			user, err = h.db.CreateUser(req.User.Email, "", req.User.Name)
 			if err != nil {
 				log.Printf("[Auth] Failed to create user: %v", err)
 				http.Error(w, "Failed to create user", http.StatusInternalServerError)
 				return
+			}
+
+			// Update additional user fields
+			if err := h.db.UpdateUserFields(user.ID, true, "google"); err != nil {
+				log.Printf("[Auth] Failed to update user fields: %v", err)
+				// Don't return error here as the user is already created
 			}
 		} else {
 			log.Printf("[Auth] Database error while checking user: %v", err)
@@ -417,13 +430,11 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	accessExp := time.Now().Add(15 * time.Minute)
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 	jti := uuid.New().String()
-	fingerprint := generateTokenFingerprint(r)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
 		"exp": accessExp.Unix(),
 		"jti": jti,
-		"fgp": fingerprint,
 	})
 
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
@@ -448,15 +459,18 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{
+	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
+	response := AuthResponse{
 		ID:           user.ID,
 		Token:        tokenString,
 		RefreshToken: refreshToken,
 		ExpiresAt:    accessExp.Unix(),
 		Name:         user.Name,
 		Email:        user.Email,
-	})
+	}
+	log.Printf("[Auth] Google auth response: %+v", response)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // UpdateProfile handles user profile update endpoint (PUT /user/profile)
@@ -528,7 +542,6 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
-	tokenString := authHeader[7:] // Skip "Bearer " prefix
 
 	var req UpdatePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -556,13 +569,6 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)); err != nil {
 		log.Printf("[Auth] Current password is incorrect for user: %s", userID)
 		http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
-		return
-	}
-
-	// Invalidate current session first
-	if err := h.db.InvalidateSession(tokenString); err != nil {
-		log.Printf("[Auth] Error invalidating current session: %v", err)
-		http.Error(w, "Failed to invalidate current session", http.StatusInternalServerError)
 		return
 	}
 
@@ -632,18 +638,31 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Auth] Error deleting refresh token: %v", err)
 		}
 
-		// Generate new tokens
+		// Get device info and generate fingerprint
+		deviceInfo := r.UserAgent()
+
+		// Generate new tokens with enhanced security
 		accessExp := time.Now().Add(15 * time.Minute)
 		refreshExp := time.Now().Add(7 * 24 * time.Hour)
+
+		// Generate JTI for token tracking
+		jti := uuid.New().String()
 
 		accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"sub": userID,
 			"exp": accessExp.Unix(),
+			"jti": jti,
 		})
 
 		accessTokenString, err := accessToken.SignedString([]byte(h.jwtSecret))
 		if err != nil {
 			http.Error(w, "Error generating access token", http.StatusInternalServerError)
+			return
+		}
+
+		// Create session record for the new token
+		if err := h.db.CreateSession(userID, accessTokenString, accessExp, deviceInfo); err != nil {
+			http.Error(w, "Error creating session", http.StatusInternalServerError)
 			return
 		}
 
@@ -654,8 +673,9 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(TokenResponse{
-			AccessToken:  accessTokenString,
+		json.NewEncoder(w).Encode(AuthResponse{
+			ID:           userID,
+			Token:        accessTokenString,
 			RefreshToken: refreshToken,
 			ExpiresAt:    accessExp.Unix(),
 		})
