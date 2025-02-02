@@ -34,19 +34,24 @@ export default function Orders() {
   }, [status, router])
 
   useEffect(() => {
-    if (session) {
-      api.get('/api/user/orders')
-        .then(response => {
+    const fetchOrders = async () => {
+      if (session?.user?.id && !session?.error) {
+        try {
+          const response = await api.get('/api/user/orders')
           setOrders(response.data?.orders || [])
-          setLoading(false)
-        })
-        .catch(error => {
+        } catch (error) {
           console.error('Error fetching orders:', error)
           setOrders([])
+        } finally {
           setLoading(false)
-        })
+        }
+      } else {
+        setLoading(false)
+      }
     }
-  }, [session])
+
+    fetchOrders()
+  }, [session?.user?.id, session?.error])
 
   if (status === 'loading' || loading) {
     return (
