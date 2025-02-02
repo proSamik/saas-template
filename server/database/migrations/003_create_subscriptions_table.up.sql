@@ -1,7 +1,7 @@
 -- Create subscriptions table
 CREATE TABLE IF NOT EXISTS subscriptions (
     id SERIAL PRIMARY KEY,
-    subscription_id VARCHAR(255) NOT NULL UNIQUE,
+    subscription_id INTEGER NOT NULL UNIQUE,
     user_id UUID NOT NULL,
     order_id INTEGER NOT NULL,
     customer_id INTEGER NOT NULL,
