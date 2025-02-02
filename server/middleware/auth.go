@@ -3,8 +3,6 @@ package middleware
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"log"
 	"net/http"
 	"strings"
@@ -20,6 +18,9 @@ type contextKey string
 
 // UserIDKey is the context key for storing the user ID
 const UserIDKey contextKey = "userID"
+
+// UserIDContextKey is the exported string version of UserIDKey for external use
+const UserIDContextKey = "userID"
 
 // AuthMiddleware handles JWT authentication for protected routes
 type AuthMiddleware struct {
@@ -42,21 +43,24 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		// Get token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"message":"Authorization header required"}`, http.StatusUnauthorized)
 			return
 		}
 
 		// Remove "Bearer " prefix
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// Check if token is blacklisted
-		blacklisted, err := m.db.IsTokenBlacklisted(tokenString)
+		// Check if session is valid and not expired
+		sessionValid, err := m.db.IsSessionValid(tokenString)
 		if err != nil {
-			http.Error(w, "Error validating token", http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"message":"Error validating session"}`, http.StatusInternalServerError)
 			return
 		}
-		if blacklisted {
-			http.Error(w, "Token has been revoked", http.StatusUnauthorized)
+		if !sessionValid {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"message":"Session has expired or been invalidated"}`, http.StatusUnauthorized)
 			return
 		}
 
@@ -70,7 +74,8 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		})
 
 		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"message":"Invalid token"}`, http.StatusUnauthorized)
 			return
 		}
 
@@ -78,26 +83,16 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 			// Explicit expiration check
 			if exp, ok := claims["exp"].(float64); !ok || time.Now().Unix() > int64(exp) {
-				http.Error(w, "Token has expired", http.StatusUnauthorized)
-				return
-			}
-
-			// Validate token fingerprint
-			expectedFingerprint := generateTokenFingerprint(r)
-			tokenFingerprint, ok := claims["fgp"].(string)
-			if !ok || tokenFingerprint != expectedFingerprint {
-				// Suspicious activity detected - rotate token
-				if err := m.db.InvalidateSession(tokenString); err != nil {
-					log.Printf("Error invalidating suspicious session: %v", err)
-				}
-				http.Error(w, "Invalid token binding - please reauthenticate", http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"message":"Token has expired"}`, http.StatusUnauthorized)
 				return
 			}
 
 			// Validate JTI claim
 			jti, ok := claims["jti"].(string)
 			if !ok || jti == "" {
-				http.Error(w, "Invalid token ID", http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"message":"Invalid token ID"}`, http.StatusUnauthorized)
 				return
 			}
 
@@ -106,10 +101,13 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 				log.Printf("Error updating session activity: %v", err)
 			}
 
+			// Store user ID in context using both the typed and string keys for compatibility
 			ctx := context.WithValue(r.Context(), UserIDKey, claims["sub"])
+			ctx = context.WithValue(ctx, UserIDContextKey, claims["sub"])
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"message":"Invalid token claims"}`, http.StatusUnauthorized)
 		}
 	})
 }
@@ -117,35 +115,13 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 // GetUserID retrieves the user ID from the context
 // Returns an empty string if the user ID is not found in the context
 func GetUserID(ctx context.Context) string {
+	// Try getting the value using the typed key first
 	if userID, ok := ctx.Value(UserIDKey).(string); ok {
 		return userID
 	}
+	// Fall back to string key if typed key fails
+	if userID, ok := ctx.Value(UserIDContextKey).(string); ok {
+		return userID
+	}
 	return ""
-}
-
-// generateTokenFingerprint creates a unique fingerprint for token binding
-// using client-specific attributes like User-Agent and IP address
-func generateTokenFingerprint(r *http.Request) string {
-	// Get client IP, checking for proxy headers first
-	clientIP := r.Header.Get("X-Forwarded-For")
-	if clientIP == "" {
-		clientIP = r.Header.Get("X-Real-IP")
-	}
-	if clientIP == "" {
-		clientIP = r.RemoteAddr
-	}
-	// Remove port number if present
-	if i := strings.LastIndex(clientIP, ":"); i != -1 {
-		clientIP = clientIP[:i]
-	}
-
-	// Get User-Agent
-	userAgent := r.UserAgent()
-
-	// Combine values and hash
-	data := clientIP + "|" + userAgent
-	hash := sha256.Sum256([]byte(data))
-
-	// Return hex-encoded hash
-	return hex.EncodeToString(hash[:])
 }
