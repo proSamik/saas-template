@@ -178,8 +178,10 @@ export const authConfig = {
           return token
         } catch (error: any) {
           if (error.response?.status === 401) {
-            // Token is invalid (possibly blacklisted), proceed with refresh
-            console.log('[NextAuth] Token invalid, attempting refresh')
+            // Token is invalid (possibly blacklisted), force refresh flow
+            console.log('[NextAuth] Token invalid, forcing refresh flow')
+            token.expiresAt = 0 // Force token refresh
+            return token
           } else {
             // For other errors, return existing token
             return token

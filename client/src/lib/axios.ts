@@ -101,6 +101,7 @@ api.interceptors.request.use(async (config) => {
 const retryMap = new Map<string, number>();
 const maxRetries = 3;
 const backoffDelay = 1000; // Base delay in milliseconds
+const maxBackoffDelay = 10000; // Maximum delay cap of 10 seconds
 
 // Add response interceptor for error handling
 api.interceptors.response.use(
@@ -116,7 +117,8 @@ api.interceptors.response.use(
     const requestKey = `${originalRequest.method}-${originalRequest.url}`;
     const retryCount = retryMap.get(requestKey) || 0;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Handle 401 errors and token refresh
+    if (error.response?.status === 401) {
       // Check if the error indicates a blacklisted or invalid token
       const errorMessage = (error.response.data as APIErrorResponse)?.message || '';
       if (errorMessage.includes('revoked') || errorMessage.includes('invalid token binding')) {
@@ -126,7 +128,48 @@ api.interceptors.response.use(
         return Promise.reject(new Error('Session invalidated. Please log in again.'));
       }
 
-      if (isRefreshing) {
+      // Only attempt token refresh if not already retrying and not in refresh process
+      if (!originalRequest._retry && !isRefreshing) {
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+          const session = await getSession();
+          if (!session?.user?.refreshToken || !session?.user?.provider) {
+            throw new Error('No refresh token or provider available');
+          }
+
+          const response = await axios.post<TokenRefreshResponse>(
+            `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
+            {
+              refreshToken: session.user.refreshToken,
+              provider: session.user.provider
+            },
+            {
+              headers: {
+                'User-Agent': window.navigator.userAgent
+              }
+            }
+          );
+
+          const { signIn } = await import('next-auth/react');
+          await signIn('credentials', {
+            redirect: false,
+            accessToken: response.data.token,
+            refreshToken: response.data.refreshToken
+          });
+
+          originalRequest.headers.Authorization = `Bearer ${response.data.token}`;
+          processQueue(null, response.data.token);
+          return api(originalRequest);
+        } catch (refreshError) {
+          processQueue(refreshError as Error);
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
+        }
+      } else if (isRefreshing) {
+        // Queue the request if a refresh is in progress
         try {
           const token = await new Promise((resolve, reject) => {
             failedQueue.push({ resolve, reject });
@@ -137,57 +180,31 @@ api.interceptors.response.use(
           return Promise.reject(err);
         }
       }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const session = await getSession();
-        if (!session?.user?.refreshToken || !session?.user?.provider) {
-          throw new Error('No refresh token or provider available');
-        }
-
-        const response = await axios.post<TokenRefreshResponse>(
-          `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
-          {
-            refreshToken: session.user.refreshToken,
-            provider: session.user.provider
-          },
-          {
-            headers: {
-              'User-Agent': window.navigator.userAgent
-            }
-          }
-        );
-
-        const { signIn } = await import('next-auth/react');
-        await signIn('credentials', {
-          redirect: false,
-          accessToken: response.data.token,
-          refreshToken: response.data.refreshToken
-        });
-
-        originalRequest.headers.Authorization = `Bearer ${response.data.token}`;
-        processQueue(null, response.data.token);
-        return api(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError as Error);
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
     }
 
     // Handle general request retries with exponential backoff
-    // Don't retry on connection errors or when server is unreachable
-    if (retryCount < maxRetries && 
-        error.response?.status !== 401 && 
-        error.code !== 'ERR_CONNECTION_RESET' && 
-        error.code !== 'ECONNABORTED') {
+    const shouldRetry = (
+      retryCount < maxRetries &&
+      error.response?.status !== 401 &&
+      error.response?.status !== 404 && // Don't retry not found
+      error.response?.status !== 422 && // Don't retry validation errors
+      !error.response?.headers['x-no-retry'] && // Check if server explicitly asks not to retry
+      error.code !== 'ERR_CANCELED' // Don't retry canceled requests
+    );
+
+    if (shouldRetry) {
       retryMap.set(requestKey, retryCount + 1);
-      const delay = Math.min(backoffDelay * Math.pow(2, retryCount), 10000); // Cap at 10 seconds
+      const delay = Math.min(backoffDelay * Math.pow(2, retryCount), maxBackoffDelay);
       
-      await new Promise(resolve => setTimeout(resolve, delay));
+      // Add jitter to prevent thundering herd
+      const jitter = Math.random() * 100;
+      await new Promise(resolve => setTimeout(resolve, delay + jitter));
+      
+      // Clear Authorization header on network errors to force re-fetch of token
+      if (!error.response && error.code === 'ERR_NETWORK') {
+        delete originalRequest.headers.Authorization;
+      }
+      
       return api(originalRequest);
     }
 
