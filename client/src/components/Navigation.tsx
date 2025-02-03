@@ -1,195 +1,157 @@
-'use client'
+'use client';
 
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ThemeToggle } from './ThemeToggle'
-import { useState, useRef, useEffect } from 'react'
-import { UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
-import useAuthStore from '@/lib/store'
-import { useAuth } from '@/lib/useAuth'
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { auth } from '@/lib/auth';
 
-/**
- * Navigation component that displays the top navigation bar
- * with authentication state and theme toggle
- */
-export function Navigation() {
-  const { user } = useAuthStore()
-  const { isAuthenticated } = useAuth()
-  const { clearAuth } = useAuthStore()
-  const router = useRouter()
-  const [isOpen, setIsOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+const Navigation = () => {
+  const router = useRouter();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const handleSignOut = async () => {
-    clearAuth()
-    router.push('/')
-  }
-
-  // Close dropdown when clicking outside
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+    const checkAuth = async () => {
+      try {
+        await auth.getValidToken();
+        setIsAuthenticated(true);
+      } catch (error) {
+        setIsAuthenticated(false);
       }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const token = await auth.getValidToken();
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      localStorage.removeItem('token');
+      setIsAuthenticated(false);
+      router.push('/auth/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  };
 
   return (
-    <div className="fixed top-0 left-0 right-0 bg-light-background dark:bg-dark-background z-50 flex justify-center w-full mx-auto">
-      <nav className="flex w-full max-w-7xl px-4 sm:px-6 lg:px-8 border-b border-light-accent dark:border-dark-accent">
-        <div className="flex justify-between items-center w-full h-16">
-          {/* Logo and Navigation Links */}
-          <div className="flex items-center space-x-8">
-            <Link
-              href="/"
-              className="flex items-center font-semibold text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-            >
-              SaaS Platform
-            </Link>
+    <nav className="bg-white dark:bg-gray-900 fixed w-full z-20 top-0 start-0 border-b border-gray-200 dark:border-gray-600">
+      <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
+        {/* Logo */}
+        <Link href="/" className="flex items-center space-x-3 rtl:space-x-reverse">
+          <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">SaaS Platform</span>
+        </Link>
 
-            {/* Desktop Navigation Links */}
-            <div className="hidden md:flex space-x-6">
-              <button
-                onClick={() => {
-                  if (window.location.pathname === '/') {
-                    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
-                  } else {
-                    router.push('/#pricing')
-                  }
-                }}
-                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-              >
-                Pricing
-              </button>
-              <button
-                onClick={() => {
-                  if (window.location.pathname === '/') {
-                    document.querySelector('#demo')?.scrollIntoView({ behavior: 'smooth' })
-                  } else {
-                    router.push('/#demo')
-                  }
-                }}
-                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-              >
-                Demo
-              </button>
-              {isAuthenticated && (
-                <Link
-                  href="/dashboard"
-                  className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-                >
-                  Dashboard
-                </Link>
-              )}
-            </div>
-          </div>
-
-          {/* Theme Toggle, Auth, and Mobile Menu Button */}
-          <div className="flex items-center gap-6">
-            <ThemeToggle />
-            
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden rounded-md p-2 text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
-            >
-              {isMobileMenuOpen ? (
-                <XMarkIcon className="h-6 w-6" />
-              ) : (
-                <Bars3Icon className="h-6 w-6" />
-              )}
-            </button>
-
-            {/* User Menu */}
-            {isAuthenticated ? (
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="flex items-center space-x-2 text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-                >
-                  <UserCircleIcon className="h-6 w-6" />
-                  <span className="hidden md:inline">{user?.name || 'User'}</span>
-                </button>
-
-                {isOpen && (
-                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
-                    <div className="py-1">
-                      <Link
-                        href="/dashboard/settings"
-                        className="block px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
-                        onClick={() => setIsOpen(false)}
-                      >
-                        Settings
-                      </Link>
-                      <button
-                        onClick={handleSignOut}
-                        className="block w-full text-left px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
+        {/* Auth Buttons / User Menu */}
+        <div className="flex md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
+          {!isAuthenticated ? (
+            <div className="space-x-2">
               <Link
                 href="/auth/login"
-                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
+                className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
               >
-                Sign in
+                Login
               </Link>
-            )}
-          </div>
-        </div>
+              <Link
+                href="/auth/signup"
+                className="text-blue-700 hover:text-white border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 text-center dark:border-blue-500 dark:text-blue-500 dark:hover:text-white dark:hover:bg-blue-600 dark:focus:ring-blue-800"
+              >
+                Register
+              </Link>
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                className="flex text-sm bg-gray-800 rounded-full md:me-0 focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                <span className="sr-only">Open user menu</span>
+                <div className="relative w-8 h-8 overflow-hidden bg-gray-100 rounded-full dark:bg-gray-600">
+                  <svg className="absolute w-10 h-10 text-gray-400 -left-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </button>
 
-        {/* Mobile menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-800 border-b border-light-accent dark:border-dark-accent">
-            <div className="px-2 pt-2 pb-3 space-y-1">
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false)
-                  if (window.location.pathname === '/') {
-                    document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
-                  } else {
-                    router.push('/#pricing')
-                  }
-                }}
-                className="block w-full text-left px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
-              >
-                Pricing
-              </button>
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false)
-                  if (window.location.pathname === '/') {
-                    document.querySelector('#demo')?.scrollIntoView({ behavior: 'smooth' })
-                  } else {
-                    router.push('/#demo')
-                  }
-                }}
-                className="block w-full text-left px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
-              >
-                Demo
-              </button>
-              {isAuthenticated && (
-                <Link
-                  href="/dashboard"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
-                >
-                  Dashboard
-                </Link>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md overflow-hidden shadow-xl z-10">
+                  <Link
+                    href="/dashboard"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Settings
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Logout
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-        )}
-      </nav>
-    </div>
-  )
-}
+          )}
+        </div>
+
+        {/* Navigation Links */}
+        <div className="items-center justify-between hidden w-full md:flex md:w-auto md:order-1">
+          <ul className="flex flex-col p-4 md:p-0 mt-4 font-medium border border-gray-100 rounded-lg bg-gray-50 md:space-x-8 rtl:space-x-reverse md:flex-row md:mt-0 md:border-0 md:bg-white dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
+            <li>
+              <Link 
+                href="/" 
+                className="block py-2 px-3 text-gray-900 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-blue-700 md:p-0 md:dark:hover:text-blue-500 dark:text-white dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent dark:border-gray-700"
+              >
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link 
+                href="/pricing" 
+                className="block py-2 px-3 text-gray-900 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-blue-700 md:p-0 md:dark:hover:text-blue-500 dark:text-white dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent dark:border-gray-700"
+              >
+                Pricing
+              </Link>
+            </li>
+            {isAuthenticated && (
+              <>
+                <li>
+                  <Link 
+                    href="/dashboard" 
+                    className="block py-2 px-3 text-gray-900 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-blue-700 md:p-0 md:dark:hover:text-blue-500 dark:text-white dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent dark:border-gray-700"
+                  >
+                    Dashboard
+                  </Link>
+                </li>
+                <li>
+                  <Link 
+                    href="/settings" 
+                    className="block py-2 px-3 text-gray-900 rounded hover:bg-gray-100 md:hover:bg-transparent md:hover:text-blue-700 md:p-0 md:dark:hover:text-blue-500 dark:text-white dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent dark:border-gray-700"
+                  >
+                    Settings
+                  </Link>
+                </li>
+              </>
+            )}
+          </ul>
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+export default Navigation;
