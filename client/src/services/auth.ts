@@ -30,6 +30,10 @@ const api = axios.create({
   withCredentials: true, // Required for cookies
 });
 
+// Track refresh attempts
+let refreshAttempts = 0;
+const MAX_REFRESH_ATTEMPTS = 10;
+
 // Intercept responses to handle token refresh
 api.interceptors.response.use(
   (response) => response,
@@ -38,32 +42,53 @@ api.interceptors.response.use(
 
     console.log('[Auth] API Error intercepted:', { status: error.response?.status, url: originalRequest.url });
 
-    // If error is not 401 or request has already been retried, reject
-    if (error.response?.status !== 401 || originalRequest._retry) {
-      console.log('[Auth] Request failed - not a token issue or already retried');
+    // Check if error is due to unauthorized access (401 or 404) and request hasn't been retried
+    if (!(error.response?.status === 401 || error.response?.status === 404) || originalRequest._retry) {
+      console.log('[Auth] Request failed - not an auth issue or already retried');
       return Promise.reject(error);
+    }
+
+    // Check refresh attempts
+    if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+      console.log('[Auth] Maximum refresh attempts reached, redirecting to login');
+      window.location.href = '/auth/login';
+      return Promise.reject(new Error('Maximum refresh attempts reached'));
     }
 
     console.log('[Auth] Attempting to refresh token...');
     originalRequest._retry = true;
+    refreshAttempts++;
 
     try {
-      // Attempt to refresh the token
-      const response = await api.post('/auth/refresh');
+      // Get CSRF token from cookie
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+      
+      // Attempt to refresh the token with CSRF token
+      const response = await api.post('/auth/refresh', {}, {
+        headers: {
+          'X-CSRF-Token': csrfToken
+        }
+      });
       console.log('[Auth] Token refresh successful');
       
+      // Reset refresh attempts on successful refresh
+      refreshAttempts = 0;
+      
       // Update access token in memory
-      const { Token } = response.data;
+      const { token } = response.data;
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       console.log('[Auth] Updated access token in memory');
       
       // Retry original request with new token
-      originalRequest.headers['Authorization'] = `Bearer ${Token}`;
+      originalRequest.headers['Authorization'] = `Bearer ${token}`;
       console.log('[Auth] Retrying original request with new token');
       return api(originalRequest);
     } catch (refreshError) {
-      console.log('[Auth] Token refresh failed, redirecting to login');
-      // Handle refresh failure - clear tokens and redirect to login
-      window.location.href = '/auth/login';
+      console.log('[Auth] Token refresh failed, attempts:', refreshAttempts);
+      if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+        console.log('[Auth] Maximum refresh attempts reached, redirecting to login');
+        window.location.href = '/auth/login';
+      }
       return Promise.reject(refreshError);
     }
   }
@@ -119,6 +144,20 @@ export const authService = {
   setAuthHeader(token: string) {
     console.log('[Auth] Setting auth header');
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  },
+
+  async get<T = any>(url: string): Promise<T> {
+    console.log(`[Auth] Sending GET request to ${url}`);
+    const response = await api.get<T>(url);
+    console.log(`[Auth] GET response received from ${url}`);
+    return response.data;
+  },
+
+  async post(url: string, data: any) {
+    console.log(`[Auth] Sending POST request to ${url}`);
+    const response = await api.post(url, data);
+    console.log(`[Auth] POST response received from ${url}`);
+    return response;
   },
 
   clearAuthHeader() {
