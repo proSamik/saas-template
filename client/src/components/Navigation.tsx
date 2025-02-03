@@ -6,13 +6,15 @@ import { ThemeToggle } from './ThemeToggle'
 import { useState, useRef, useEffect } from 'react'
 import { UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import useAuthStore from '@/lib/store'
+import { useAuth } from '@/lib/useAuth'
 
 /**
  * Navigation component that displays the top navigation bar
  * with authentication state and theme toggle
  */
 export function Navigation() {
-  const { user, accessToken } = useAuthStore()
+  const { user } = useAuthStore()
+  const { isAuthenticated } = useAuth()
   const { clearAuth } = useAuthStore()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
@@ -76,7 +78,7 @@ export function Navigation() {
               >
                 Demo
               </button>
-              {accessToken && (
+              {isAuthenticated && (
                 <Link
                   href="/dashboard"
                   className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
@@ -104,7 +106,7 @@ export function Navigation() {
             </button>
 
             {/* User Menu */}
-            {accessToken ? (
+            {isAuthenticated ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsOpen(!isOpen)}
@@ -175,7 +177,7 @@ export function Navigation() {
               >
                 Demo
               </button>
-              {accessToken && (
+              {isAuthenticated && (
                 <Link
                   href="/dashboard"
                   onClick={() => setIsMobileMenuOpen(false)}
