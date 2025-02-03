@@ -1,80 +1,99 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Input } from '@/components/Input'
-import { Button } from '@/components/Button'
-import api from '@/lib/axios'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
-/**
- * ForgotPassword page component that handles password reset requests
- * Sends a reset link to the user's email
- */
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import  Navigation  from '@/components/Navigation'
+import { authService } from '@/services/auth'
+
 export default function ForgotPassword() {
-  const router = useRouter()
-  const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setIsLoading(true)
 
+    const formData = new FormData(event.currentTarget)
+    const email = formData.get('email') as string
+
     try {
-      await api.post('/auth/reset-password/request', { email })
-      toast.success('If your email is registered, you will receive a password reset link')
-      router.push('/auth/login')
+      await authService.forgotPassword(email)
+      setEmailSent(true)
+      toast.success('Password reset instructions have been sent to your email')
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to request password reset')
+      toast.error(error.response?.data?.message || 'Something went wrong')
     } finally {
       setIsLoading(false)
     }
   }
 
+  if (emailSent) {
+    return (
+      <div className="min-h-screen bg-light-background dark:bg-dark-background">
+        <Navigation />
+        
+        <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
+          <div className="sm:mx-auto sm:w-full sm:max-w-md">
+            <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
+              Check your email
+            </h2>
+            <p className="mt-2 text-center text-sm text-light-muted dark:text-dark-muted">
+              We've sent password reset instructions to your email address.
+            </p>
+            <div className="mt-4 text-center">
+              <Link href="/auth/login" className="font-medium text-primary-600 hover:text-primary-500">
+                Return to sign in
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-light-background dark:bg-dark-background">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-light-foreground dark:text-dark-foreground">
-            Reset Password
+    <div className="min-h-screen bg-light-background dark:bg-dark-background">
+      <Navigation />
+      
+      <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
+            Reset your password
           </h2>
           <p className="mt-2 text-center text-sm text-light-muted dark:text-dark-muted">
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we'll send you instructions to reset your password.
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <Input
-            label="Email"
-            id="email"
-            name="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="bg-light-background dark:bg-dark-background px-4 py-8 shadow sm:rounded-lg sm:px-10">
+            <form className="space-y-6" onSubmit={onSubmit}>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                label="Email address"
+                autoComplete="email"
+                required
+              />
 
-          <div>
-            <Button
-              type="submit"
-              className="w-full"
-              isLoading={isLoading}
-            >
-              Send Reset Link
-            </Button>
-          </div>
+              <Button type="submit" fullWidth isLoading={isLoading}>
+                {isLoading ? 'Sending instructions...' : 'Send reset instructions'}
+              </Button>
 
-          <div className="text-center">
-            <Link
-              href="/auth/login"
-              className="text-sm text-primary-600 hover:text-primary-500"
-            >
-              Back to Login
-            </Link>
+              <div className="text-center">
+                <Link href="/auth/login" className="text-sm font-medium text-primary-600 hover:text-primary-500">
+                  Return to sign in
+                </Link>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   )
-} 
+}
