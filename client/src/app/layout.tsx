@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { AuthProvider } from '@/contexts/AuthContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,6 +25,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning className={`${inter.className} bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground`}>
         <ThemeProvider>
+          <AuthProvider>
             {children}
             <Toaster 
               position="bottom-right"
@@ -31,6 +33,7 @@ export default function RootLayout({
                 className: 'bg-light-background dark:bg-dark-background text-light-foreground dark:text-dark-foreground',
               }}
             />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
