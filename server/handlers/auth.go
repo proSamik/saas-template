@@ -47,7 +47,6 @@ type LoginRequest struct {
 type AuthResponse struct {
 	ID           string `json:"id"`           // User's unique identifier
 	Token        string `json:"token"`        // JWT access token
-	RefreshToken string `json:"refreshToken"` // Refresh token for obtaining new access tokens
 	ExpiresAt    int64  `json:"expiresAt"`    // Access token expiration timestamp
 	Name         string `json:"name"`         // User's display name
 	Email        string `json:"email"`        // User's email address
@@ -114,68 +113,6 @@ func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
 		jwtRefreshSecret: []byte(jwtSecret), // Using same secret for now, could be different in production
 		authLimiter:      authLimiter,
 	}
-}
-
-// validateToken validates a JWT token and returns the parsed token if valid
-func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return h.jwtSecret, nil
-	})
-
-	if err != nil {
-		log.Printf("[Auth] Token validation error: %v", err)
-		return nil, err
-	}
-
-	// Check if token is valid and has required claims
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		// Extract token ID and user ID
-		jti, ok1 := claims["jti"].(string)
-		_, ok2 := claims["sub"].(string)
-
-		if !ok1 || !ok2 {
-			log.Printf("[Auth] Token missing required claims")
-			return nil, fmt.Errorf("token missing required claims")
-		}
-
-		// Check if token is blacklisted
-		blacklisted, err := h.db.IsTokenBlacklisted(jti)
-		if err != nil {
-			log.Printf("[Auth] Error checking token blacklist: %v", err)
-			return nil, fmt.Errorf("error checking token blacklist")
-		}
-
-		if blacklisted {
-			log.Printf("[Auth] Token is blacklisted: %s", jti)
-			return nil, fmt.Errorf("token is blacklisted")
-		}
-	}
-
-	return token, nil
-}
-
-// validatePassword checks if a password meets security requirements
-func validatePassword(password string) error {
-	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters long")
-	}
-	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one uppercase letter")
-	}
-	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one lowercase letter")
-	}
-	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one number")
-	}
-	if !regexp.MustCompile(`[^A-Za-z0-9]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one special character")
-	}
-	return nil
 }
 
 // Register handles user registration endpoint (POST /auth/register)
@@ -760,6 +697,68 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully logged out"})
 
+}
+
+// validateToken validates a JWT token and returns the parsed token if valid
+func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return h.jwtSecret, nil
+	})
+
+	if err != nil {
+		log.Printf("[Auth] Token validation error: %v", err)
+		return nil, err
+	}
+
+	// Check if token is valid and has required claims
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// Extract token ID and user ID
+		jti, ok1 := claims["jti"].(string)
+		_, ok2 := claims["sub"].(string)
+
+		if !ok1 || !ok2 {
+			log.Printf("[Auth] Token missing required claims")
+			return nil, fmt.Errorf("token missing required claims")
+		}
+
+		// Check if token is blacklisted
+		blacklisted, err := h.db.IsTokenBlacklisted(jti)
+		if err != nil {
+			log.Printf("[Auth] Error checking token blacklist: %v", err)
+			return nil, fmt.Errorf("error checking token blacklist")
+		}
+
+		if blacklisted {
+			log.Printf("[Auth] Token is blacklisted: %s", jti)
+			return nil, fmt.Errorf("token is blacklisted")
+		}
+	}
+
+	return token, nil
+}
+
+// validatePassword checks if a password meets security requirements
+func validatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one number")
+	}
+	if !regexp.MustCompile(`[^A-Za-z0-9]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+	return nil
 }
 
 // UpdateProfile handles user profile update endpoint (PUT /user/profile)
