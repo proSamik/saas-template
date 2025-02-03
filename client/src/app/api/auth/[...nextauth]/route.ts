@@ -118,7 +118,7 @@ export const authConfig: NextAuthConfig = {
             { 
               withCredentials: true,
               headers: {
-                'User-Agent': typeof window !== 'undefined' ? window.navigator.userAgent : 'server'
+                'User-Agent': 'NextAuth-Client'
               }
             }
           )
@@ -127,6 +127,7 @@ export const authConfig: NextAuthConfig = {
           Object.assign(user, {
             id: response.data.id,
             token: response.data.token,
+            refreshToken: response.data.refreshToken,
             expiresAt: response.data.expiresAt,
             name: response.data.name,
             email: response.data.email,
@@ -139,23 +140,18 @@ export const authConfig: NextAuthConfig = {
             expiresAt: response.data.expiresAt,
             userId: response.data.id
           })
-          useAuthStore.getState().setAuth(response.data.token, response.data.expiresAt)
-          useAuthStore.getState().setUser({
+
+          // Set auth data in the store regardless of window availability
+          const store = useAuthStore.getState()
+          store.setAuth(response.data.token, response.data.expiresAt)
+          store.setUser({
             id: response.data.id,
             name: response.data.name,
             email: response.data.email,
           })
+          store.setAccessToken(response.data.token)
 
-          // Ensure token is available for subsequent requests
-          if (typeof window !== 'undefined') {
-            console.log('[Auth Debug] Setting access token for Google auth')
-            const { setAccessToken } = useAuthStore.getState()
-            setAccessToken(response.data.token)
-            console.log('[Auth Debug] Google auth data stored successfully')
-          } else {
-            console.log('[Auth Debug] Window object not available - running on server side')
-          }
-
+          console.log('[Auth Debug] Google auth data stored successfully')
           return true
         } catch (error: any) {
           console.error('[Auth Debug] Google authentication failed:', error.response?.data || error)
