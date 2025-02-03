@@ -8,6 +8,7 @@ import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import LinkedAccounts from '@/components/LinkedAccounts'
 import api from '@/lib/axios'
+import { useAuth } from '@/lib/useAuth'
 import useAuthStore from '@/lib/store'
 import toast from 'react-hot-toast'
 
@@ -21,7 +22,8 @@ interface FormData {
 
 export default function Settings() {
   const router = useRouter()
-  const { user, accessToken, updateUser } = useAuthStore()
+  const { isAuthenticated, loading, user } = useAuth()
+  const { accessToken, updateUser } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -32,7 +34,7 @@ export default function Settings() {
   })
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!isAuthenticated && !loading) {
       router.push('/auth/login')
       return
     }
@@ -65,6 +67,7 @@ export default function Settings() {
         ...user!,
         name: formData.name,
         email: formData.email,
+        image: user?.image || undefined
       })
 
       toast.success('Profile updated successfully')
