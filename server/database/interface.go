@@ -16,19 +16,14 @@ type DBInterface interface {
 	UpdateUserFields(id string, emailVerified bool, provider string) error
 	UserExists(email string) (bool, error)
 
-	// Session operations
-	CreateSession(userID string, token string, expiresAt time.Time, deviceInfo string) error
-	IsSessionValid(token string) (bool, error)
-	UpdateSessionActivity(token string) error
-	InvalidateAllUserSessions(userID string) error
-	BlacklistToken(token string, expiresAt time.Time) error
-	InvalidateSession(token string) error
-	InvalidateRefreshTokensForUser(userID string) error
+	// Token management operations
+	CreateRefreshToken(userID string, tokenHash string, deviceInfo string, ipAddress string, expiresAt time.Time) error
+	DeleteAllUserRefreshTokens(userID string) error
 
-	// Refresh token operations
-	CreateRefreshToken(userID string, token string, expiresAt time.Time) error
-	GetRefreshToken(token string) (string, error)
-	DeleteRefreshToken(token string) error
+	// Token blacklist operations
+	AddToBlacklist(jti string, userID string, expiresAt time.Time) error
+	IsTokenBlacklisted(jti string) (bool, error)
+	CleanupExpiredBlacklistedTokens() error
 
 	// Linked accounts operations
 	GetLinkedAccounts(userID string) ([]models.LinkedAccount, error)
