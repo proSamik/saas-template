@@ -33,15 +33,21 @@ export default function Login() {
       })
       console.log('[Auth] Login response received:', { id: response.id, expiresAt: response.expiresAt });
 
-      // Store the entire auth response in Zustand store
-      console.log('[Auth] Storing auth response in Zustand store');
+      // Store the entire auth response
+      setAuth({
+        id: response.id,
+        token: response.token,
+        expiresAt: response.expiresAt,
+        name: response.name,
+        email: response.email
+      })
 
       // Set the auth header for future requests
       console.log('[Auth] Setting auth header for future requests');
       authService.setAuthHeader(response.token)
 
       console.log('[Auth] Login successful, redirecting to dashboard');
-      router.push('/dashboard')
+      router.push('/profile')
       toast.success('Logged in successfully!')
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Invalid email or password')
@@ -153,4 +159,8 @@ export default function Login() {
       </div>
     </div>
   )
+}
+
+function setAuth(arg0: { id: string; token: string; expiresAt: number; name: string; email: string }) {
+  throw new Error('Function not implemented.')
 }
