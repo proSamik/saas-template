@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import useAuthStore from '@/lib/store'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/useAuth'
 import api from '@/lib/axios'
 
 interface DashboardStat {
@@ -21,7 +22,8 @@ const defaultStats: DashboardStat[] = [
  * Protected route that requires authentication
  */
 export default function Dashboard() {
-  const { user } = useAuthStore()
+  const router = useRouter()
+  const { isAuthenticated, loading, user } = useAuth()
   const [dashboardStats, setDashboardStats] = useState<DashboardStat[]>(defaultStats)
 
   useEffect(() => {
