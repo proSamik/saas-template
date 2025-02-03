@@ -66,9 +66,12 @@ func main() {
 	mux.HandleFunc("/auth/register", authHandler.Register)
 	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.HandleFunc("/auth/google", authHandler.GoogleAuth)
-	mux.HandleFunc("/auth/refresh", authHandler.RefreshToken)
-	mux.HandleFunc("/auth/reset-password/request", authHandler.RequestPasswordReset)
 	mux.HandleFunc("/auth/reset-password", authHandler.ResetPassword)
+
+	// Auth Routes (protected)
+	mux.Handle("/auth/refresh", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.RefreshToken)))
+	mux.Handle("/auth/logout", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.Logout)))
+	mux.Handle("/auth/reset-password/request", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.RequestPasswordReset)))
 
 	// Account linking routes (protected)
 	mux.Handle("/auth/linked-accounts", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.GetLinkedAccounts)))
@@ -106,10 +109,13 @@ func main() {
 
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:   []string{os.Getenv("CORS_ORIGIN")},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "x-signature"},
-		AllowCredentials: true,
+		AllowedOrigins:      []string{"http://localhost:3000", os.Getenv("FRONTEND_URL")}, // Add your frontend URL
+		AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:      []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
+		ExposedHeaders:      []string{"Link"},
+		AllowCredentials:    true,
+		MaxAge:              300, // Maximum value not ignored by any of major browsers
+		AllowPrivateNetwork: true,
 	})
 
 	// Start server
@@ -119,7 +125,7 @@ func main() {
 	}
 
 	log.Printf("Server starting on port %s", port)
-	if err := http.ListenAndServe(":"+port, corsHandler.Handler(mux)); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), corsHandler.Handler(mux)); err != nil {
 		log.Fatal("Error starting server:", err)
 	}
 }
