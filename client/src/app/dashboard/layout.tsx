@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
-import useAuthStore from '@/lib/store'
+import { useAuth } from '@/lib/useAuth'
 
 export default function DashboardLayout({
   children,
@@ -12,15 +12,15 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const { accessToken, user } = useAuthStore()
+  const { isAuthenticated, loading, user } = useAuth()
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!isAuthenticated && !loading) {
       router.push('/auth/login')
     }
-  }, [accessToken, router])
+  }, [isAuthenticated, loading, router])
 
-  if (!accessToken || !user) {
+  if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-light-background dark:bg-dark-background">
         <div className="text-center">
