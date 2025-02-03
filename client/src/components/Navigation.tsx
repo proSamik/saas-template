@@ -26,7 +26,7 @@ const Navigation = () => {
   const navigation = [
     { name: 'Home', href: '/' },
     { name: 'About', href: '/about' },
-    { name: 'Pricing', href: '/payments' },
+    { name: 'Payments', href: '/payments' },
   ]
 
   const isActive = (path: string) => pathname === path
@@ -42,12 +42,12 @@ const Navigation = () => {
                 SaaS Platform
               </Link>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8 relative z-10">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium ${isActive(item.href)
+                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium cursor-pointer ${isActive(item.href)
                     ? 'border-b-2 border-primary-500 text-light-foreground dark:text-dark-foreground'
                     : 'text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground'
                     }`}
@@ -85,7 +85,7 @@ const Navigation = () => {
           {/* Desktop auth buttons */}
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             {auth ? (
-              <div className="relative ml-3">
+              <div className="relative ml-3 z-50">
                 <button
                   type="button"
                   className="flex rounded-full text-sm focus:outline-none"
@@ -98,16 +98,21 @@ const Navigation = () => {
                 </button>
 
                 {isProfileOpen && (
-                  <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-light-background dark:bg-dark-background py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                  <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-light-background dark:bg-dark-background py-1 shadow-lg ring-1 ring-black ring-opacity-5 z-50">
                     <Link
                       href="/profile"
-                      className="block px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
+                      className="block px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent cursor-pointer"
+                      onClick={() => setIsProfileOpen(false)}
                     >
                       Your Profile
                     </Link>
                     <button
-                      onClick={handleLogout}
-                      className="block w-full text-left px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleLogout()
+                        setIsProfileOpen(false)
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent cursor-pointer"
                     >
                       Sign out
                     </button>
