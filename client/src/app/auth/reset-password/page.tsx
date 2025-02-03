@@ -1,121 +1,119 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
-import { Input } from '@/components/Input'
-import { Button } from '@/components/Button'
-import api from '@/lib/axios'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
-/**
- * ResetPassword page component that handles password reset
- * Requires a valid reset token from the URL
- */
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import Navigation  from '@/components/Navigation'
+import { authService } from '@/services/auth'
+
 export default function ResetPassword() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [formData, setFormData] = useState({
-    newPassword: '',
-    confirmPassword: '',
-  })
   const [isLoading, setIsLoading] = useState(false)
+
   const token = searchParams.get('token')
 
-  useEffect(() => {
-    if (!token) {
-      toast.error('Invalid reset token')
-      router.push('/auth/login')
-    }
-  }, [token, router])
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+  const validatePassword = (password: string): string[] => {
+    const errors: string[] = []
+    if (password.length < 8) errors.push('Password must be at least 8 characters long')
+    if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter')
+    if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter')
+    if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number')
+    if (!/[^A-Za-z0-9]/.test(password)) errors.push('Password must contain at least one special character')
+    return errors
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsLoading(true)
 
-    if (formData.newPassword !== formData.confirmPassword) {
+    const formData = new FormData(event.currentTarget)
+    const password = formData.get('password') as string
+    const confirmPassword = formData.get('confirmPassword') as string
+
+    if (password !== confirmPassword) {
       toast.error('Passwords do not match')
+      setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
+    const passwordErrors = validatePassword(password)
+    if (passwordErrors.length > 0) {
+      setIsLoading(false)
+      passwordErrors.forEach(error => toast.error(error))
+      return
+    }
+
+    if (!token) {
+      toast.error('Invalid or expired reset token')
+      router.push('/auth/forgot-password')
+      return
+    }
 
     try {
-      await api.post('/auth/reset-password', {
-        token,
-        newPassword: formData.newPassword,
-      })
-
+      await authService.resetPassword(token, password)
       toast.success('Password has been reset successfully')
       router.push('/auth/login')
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to reset password')
+      if (error.response?.status === 401) {
+        router.push('/auth/forgot-password')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
   if (!token) {
+    router.push('/auth/forgot-password')
     return null
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-light-background dark:bg-dark-background">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-lg shadow">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-light-foreground dark:text-dark-foreground">
-            Reset Password
+    <div className="min-h-screen bg-light-background dark:bg-dark-background">
+      <Navigation />
+      
+      <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
+            Reset your password
           </h2>
           <p className="mt-2 text-center text-sm text-light-muted dark:text-dark-muted">
             Enter your new password below.
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <Input
-            label="New Password"
-            id="newPassword"
-            name="newPassword"
-            type="password"
-            value={formData.newPassword}
-            onChange={handleChange}
-            required
-          />
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="bg-light-background dark:bg-dark-background px-4 py-8 shadow sm:rounded-lg sm:px-10">
+            <form className="space-y-6" onSubmit={onSubmit}>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                label="New password"
+                autoComplete="new-password"
+                required
+              />
 
-          <Input
-            label="Confirm New Password"
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-          />
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                label="Confirm new password"
+                autoComplete="new-password"
+                required
+              />
 
-          <div>
-            <Button
-              type="submit"
-              className="w-full"
-              isLoading={isLoading}
-            >
-              Reset Password
-            </Button>
+              <Button type="submit" fullWidth isLoading={isLoading}>
+                {isLoading ? 'Resetting password...' : 'Reset password'}
+              </Button>
+            </form>
           </div>
-
-          <div className="text-center">
-            <Link
-              href="/auth/login"
-              className="text-sm text-primary-600 hover:text-primary-500"
-            >
-              Back to Login
-            </Link>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   )
-} 
+}
