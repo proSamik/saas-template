@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -51,24 +52,11 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		// Remove "Bearer " prefix
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		// Check if session is valid and not expired
-		sessionValid, err := m.db.IsSessionValid(tokenString)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			http.Error(w, `{"message":"Error validating session"}`, http.StatusInternalServerError)
-			return
-		}
-		if !sessionValid {
-			w.Header().Set("Content-Type", "application/json")
-			http.Error(w, `{"message":"Session has expired or been invalidated"}`, http.StatusUnauthorized)
-			return
-		}
-
 		// Parse and validate token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			// Validate signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrSignatureInvalid
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			return m.jwtSecret, nil
 		})
@@ -79,8 +67,16 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Extract claims and add user ID to context
+		// Extract and validate claims
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			// Validate token type
+			tokenType, ok := claims["type"].(string)
+			if !ok || tokenType != "access" {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"message":"Invalid token type"}`, http.StatusUnauthorized)
+				return
+			}
+
 			// Explicit expiration check
 			if exp, ok := claims["exp"].(float64); !ok || time.Now().Unix() > int64(exp) {
 				w.Header().Set("Content-Type", "application/json")
@@ -88,7 +84,7 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 				return
 			}
 
-			// Validate JTI claim
+			// Validate JTI claim and check blacklist
 			jti, ok := claims["jti"].(string)
 			if !ok || jti == "" {
 				w.Header().Set("Content-Type", "application/json")
@@ -96,14 +92,30 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 				return
 			}
 
-			// Update session activity
-			if err := m.db.UpdateSessionActivity(tokenString); err != nil {
-				log.Printf("Error updating session activity: %v", err)
+			// Check if token is blacklisted
+			isBlacklisted, err := m.db.IsTokenBlacklisted(jti)
+			if err != nil {
+				log.Printf("Error checking token blacklist: %v", err)
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"message":"Error validating token"}`, http.StatusInternalServerError)
+				return
+			}
+			if isBlacklisted {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"message":"Token has been revoked"}`, http.StatusUnauthorized)
+				return
 			}
 
-			// Store user ID in context using both the typed and string keys for compatibility
-			ctx := context.WithValue(r.Context(), UserIDKey, claims["sub"])
-			ctx = context.WithValue(ctx, UserIDContextKey, claims["sub"])
+			// Store user ID in context
+			userID, ok := claims["sub"].(string)
+			if !ok || userID == "" {
+				w.Header().Set("Content-Type", "application/json")
+				http.Error(w, `{"message":"Invalid user ID in token"}`, http.StatusUnauthorized)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+			ctx = context.WithValue(ctx, UserIDContextKey, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
 			w.Header().Set("Content-Type", "application/json")
