@@ -6,6 +6,7 @@ import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
 import api from '@/lib/axios'
 import { useAuth } from '@/lib/useAuth'
+import toast from 'react-hot-toast'
 
 interface Order {
   id: number
@@ -39,8 +40,8 @@ export default function Orders() {
         try {
           const response = await api.get('/api/user/orders')
           setOrders(response.data?.orders || [])
-        } catch (error) {
-          console.error('Error fetching orders:', error)
+        } catch (error: any) {
+          toast.error(error.response?.data?.message || 'Failed to fetch orders')
           setOrders([])
         } finally {
           setIsLoading(false)
