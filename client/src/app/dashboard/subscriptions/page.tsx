@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react'
 import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
 import api from '@/lib/axios'
+import { useAuth } from '@/lib/useAuth'
 import useAuthStore from '@/lib/store'
+import toast from 'react-hot-toast'
 
 interface Subscription {
   id: number
@@ -26,15 +28,16 @@ interface Subscription {
 
 export default function Subscriptions() {
   const router = useRouter()
-  const { accessToken, user } = useAuthStore()
+  const { isAuthenticated, loading: authLoading, user } = useAuth()
+  const { accessToken } = useAuthStore()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!isAuthenticated && !authLoading) {
       router.push('/auth/login')
     }
-  }, [accessToken, router])
+  }, [isAuthenticated, authLoading, router])
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -42,8 +45,8 @@ export default function Subscriptions() {
         try {
           const response = await api.get('/api/user/subscription')
           setSubscription(response.data || null)
-        } catch (error) {
-          console.error('Error fetching subscription:', error)
+        } catch (error: any) {
+          toast.error(error.response?.data?.message || 'Failed to fetch subscription')
           setSubscription(null)
         } finally {
           setLoading(false)
