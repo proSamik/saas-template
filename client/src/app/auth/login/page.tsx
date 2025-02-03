@@ -11,10 +11,12 @@ import { Input } from '@/components/ui/input'
 import Navigation  from '@/components/Navigation'
 import { SocialButton } from '@/components/ui/social-button'
 import { authService } from '@/services/auth'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function Login() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const { setAuth } = useAuth()
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -159,8 +161,4 @@ export default function Login() {
       </div>
     </div>
   )
-}
-
-function setAuth(arg0: { id: string; token: string; expiresAt: number; name: string; email: string }) {
-  throw new Error('Function not implemented.')
 }
