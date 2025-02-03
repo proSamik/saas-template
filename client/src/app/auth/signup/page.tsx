@@ -1,23 +1,32 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
-import axios from 'axios'
-import { Input } from '@/components/Input'
-import { Button } from '@/components/Button'
-import { SocialButton } from '@/components/SocialButton'
-import { Navigation } from '@/components/Navigation'
 
-/**
- * Signup page component that handles user registration
- * Supports email/password and social registration
- */
+import { toast } from 'sonner'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import Navigation from '@/components/Navigation'
+import { SocialButton } from '@/components/ui/social-button'
+import { authService } from '@/services/auth'
+import useAuthStore from '@/lib/store'
+
 export default function SignUp() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const setAuth = useAuthStore(state => state.setAuth)
+
+  const validatePassword = (password: string): string[] => {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push('Password must be at least 8 characters long');
+    if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter');
+    if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter');
+    if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number');
+    if (!/[^A-Za-z0-9]/.test(password)) errors.push('Password must contain at least one special character');
+    return errors;
+  };
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,25 +37,38 @@ export default function SignUp() {
     const password = formData.get('password') as string
     const name = formData.get('name') as string
 
+    const passwordErrors = validatePassword(password);
+    if (passwordErrors.length > 0) {
+      setIsLoading(false);
+      passwordErrors.forEach(error => toast.error(error));
+      return;
+    }
+
     try {
       // Register the user
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      await authService.register({
         email,
         password,
         name,
       })
 
-      // Sign in the user
-      const result = await signIn('credentials', {
+      // Login the user
+      const loginResponse = await authService.login({
         email,
-        password,
-        redirect: false,
+        password
+      })
+      
+      // Store the entire auth response in Zustand store
+      setAuth({
+        id: loginResponse.id,
+        token: loginResponse.token,
+        expiresAt: loginResponse.expiresAt,
+        name: loginResponse.name,
+        email: loginResponse.email
       })
 
-      if (result?.error) {
-        toast.error(result.error)
-        return
-      }
+      // Set the auth header for future requests
+      authService.setAuthHeader(loginResponse.token)
 
       router.push('/dashboard')
       toast.success('Account created successfully!')
@@ -55,6 +77,11 @@ export default function SignUp() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleGoogleSignIn = async () => {
+    // TODO: Implement Google OAuth flow
+    toast.error('Google sign-in is not yet implemented')
   }
 
   return (
@@ -124,6 +151,7 @@ export default function SignUp() {
               <div className="mt-6">
                 <SocialButton
                   provider="google"
+                  onClick={handleGoogleSignIn}
                   icon={
                     <svg className="h-5 w-5" aria-hidden="true" viewBox="0 0 24 24">
                       <path
@@ -154,4 +182,4 @@ export default function SignUp() {
       </div>
     </div>
   )
-} 
+}
