@@ -1,7 +1,6 @@
 'use client'
 
 import { useAuth } from '@/contexts/AuthContext'
-import Navigation from '@/components/Navigation'
 
 export default function Profile() {
   const { auth } = useAuth()
@@ -9,7 +8,6 @@ export default function Profile() {
   if (!auth) {
     return (
       <div className="min-h-screen bg-light-background dark:bg-dark-background">
-        <Navigation />
         <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
           <div className="text-center text-light-foreground dark:text-dark-foreground">
             Please log in to view your profile
@@ -21,8 +19,6 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
-      <Navigation />
-      
       <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <h2 className="text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
