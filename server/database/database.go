@@ -257,118 +257,6 @@ func (db *DB) UpdateUserFields(id string, emailVerified bool, provider string) e
 	return nil
 }
 
-// CreateRefreshToken creates a new refresh token for a user with an expiration time
-func (db *DB) CreateRefreshToken(userID string, token string, expiresAt time.Time) error {
-	query := `
-		UPDATE sessions
-		SET refresh_token = $1, updated_at = CURRENT_TIMESTAMP
-		WHERE user_id = $2
-		AND status = 'active'
-		AND expires_at > CURRENT_TIMESTAMP`
-
-	result, err := db.Exec(query, token, userID)
-	if err != nil {
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return ErrNotFound
-	}
-
-	return nil
-}
-
-// GetRefreshToken retrieves a valid refresh token and returns the associated user ID
-func (db *DB) GetRefreshToken(token string) (string, error) {
-	var userID string
-	query := `
-		SELECT user_id
-		FROM sessions
-		WHERE refresh_token = $1
-		AND status = 'active'
-		AND expires_at > CURRENT_TIMESTAMP`
-
-	err := db.QueryRow(query, token).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", ErrNotFound
-		}
-		return "", err
-	}
-	return userID, nil
-}
-
-// DeleteRefreshToken removes a refresh token from the database
-func (db *DB) DeleteRefreshToken(token string) error {
-	query := `
-		UPDATE sessions
-		SET refresh_token = NULL, updated_at = CURRENT_TIMESTAMP
-		WHERE refresh_token = $1
-		AND status = 'active'`
-
-	result, err := db.Exec(query, token)
-	if err != nil {
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return ErrNotFound
-	}
-
-	return nil
-}
-
-// CreateSession creates a new session record
-func (db *DB) CreateSession(userID string, token string, expiresAt time.Time, deviceInfo string) error {
-	query := `
-		INSERT INTO sessions (id, user_id, access_token, refresh_token, status, last_activity, expires_at, device_info)
-		VALUES ($1, $2, $3, NULL, $4, CURRENT_TIMESTAMP, $5, $6)`
-
-	_, err := db.Exec(query, uuid.New().String(), userID, token, "active", expiresAt, deviceInfo)
-	return err
-}
-
-// InvalidateAllUserSessions invalidates all sessions for a user
-func (db *DB) InvalidateAllUserSessions(userID string) error {
-	// Get all active sessions for the user
-	query := `
-		SELECT access_token, expires_at
-		FROM sessions
-		WHERE user_id = $1
-		AND expires_at > CURRENT_TIMESTAMP
-		AND status = 'active'`
-
-	rows, err := db.Query(query, userID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	// Invalidate each session
-	for rows.Next() {
-		var token string
-		var expiresAt time.Time
-		if err := rows.Scan(&token, &expiresAt); err != nil {
-			return err
-		}
-		if err := db.BlacklistToken(token, expiresAt); err != nil {
-			return err
-		}
-	}
-
-	return rows.Err()
-}
-
 // CreateLinkedAccount creates a new linked account for a user
 func (db *DB) CreateLinkedAccount(userID, provider, email string) (*models.LinkedAccount, error) {
 	account := &models.LinkedAccount{
@@ -538,76 +426,62 @@ func (db *DB) MarkPasswordResetTokenUsed(token string) error {
 	return nil
 }
 
-// InvalidateSession marks a session as invalid (blacklists the token)
-// BlacklistToken marks a session as invalid using the sessions table
-func (db *DB) BlacklistToken(token string, expiresAt time.Time) error {
+// CreateRefreshToken creates a new refresh token in the database
+func (db *DB) CreateRefreshToken(userID string, tokenHash string, deviceInfo string, ipAddress string, expiresAt time.Time) error {
 	query := `
-		UPDATE sessions
-		SET status = 'invalid', updated_at = CURRENT_TIMESTAMP
-		WHERE access_token = $1 AND expires_at = $2`
+		INSERT INTO refresh_tokens (id, user_id, token_hash, device_info, ip_address, expires_at, created_at, last_used_at, is_blocked)
+		VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false)`
 
-	_, err := db.Exec(query, token, expiresAt)
+	id := uuid.New().String()
+	// Use provided device info and IP address, or fallback to defaults
+	if deviceInfo == "" {
+		deviceInfo = "Unknown Device"
+	}
+	if ipAddress == "" {
+		ipAddress = "0.0.0.0"
+	}
+
+	_, err := db.Exec(query, id, userID, tokenHash, deviceInfo, ipAddress, expiresAt)
 	return err
 }
 
-// IsSessionValid checks if a session is valid and not expired
-func (db *DB) IsSessionValid(token string) (bool, error) {
+// DeleteAllUserRefreshTokens removes all refresh tokens for a user
+func (db *DB) DeleteAllUserRefreshTokens(userID string) error {
 	query := `
-		SELECT EXISTS(
-			SELECT 1
-			FROM sessions
-			WHERE access_token = $1
-			AND status = 'active'
-			AND expires_at > CURRENT_TIMESTAMP
-		)`
+		UPDATE refresh_tokens
+		SET is_blocked = true
+		WHERE user_id = $1`
 
-	var valid bool
-	err := db.QueryRow(query, token).Scan(&valid)
-	if err != nil {
-		return false, err
-	}
-	return valid, nil
+	_, err := db.Exec(query, userID)
+	return err
 }
 
-// IsTokenBlacklisted checks if a token has been invalidated
-func (db *DB) IsTokenBlacklisted(token string) (bool, error) {
+// AddToBlacklist adds a token to the blacklist
+func (db *DB) AddToBlacklist(jti string, userID string, expiresAt time.Time) error {
 	query := `
-		SELECT EXISTS(
-			SELECT 1
-			FROM sessions
-			WHERE access_token = $1
-			AND status = 'invalid'
-			AND expires_at > CURRENT_TIMESTAMP
-		)`
+		INSERT INTO token_blacklist (jti, user_id, expires_at)
+		VALUES ($1, $2, $3)`
 
-	var blacklisted bool
-	err := db.QueryRow(query, token).Scan(&blacklisted)
-	if err != nil {
-		return false, err
-	}
-	return blacklisted, nil
+	_, err := db.Exec(query, jti, userID, expiresAt)
+	return err
 }
 
-// UpdateSessionActivity updates the last activity timestamp for a session
-func (db *DB) UpdateSessionActivity(token string) error {
+// IsTokenBlacklisted checks if a token is blacklisted
+func (db *DB) IsTokenBlacklisted(jti string) (bool, error) {
+	var exists bool
 	query := `
-		UPDATE sessions
-		SET last_activity = CURRENT_TIMESTAMP
-		WHERE access_token = $1`
+		SELECT EXISTS(
+			SELECT 1 FROM token_blacklist
+			WHERE jti = $1 AND expires_at > CURRENT_TIMESTAMP
+		)`
 
-	result, err := db.Exec(query, token)
-	if err != nil {
-		return err
-	}
+	err := db.QueryRow(query, jti).Scan(&exists)
+	return exists, err
+}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return ErrNotFound
-	}
-
-	return nil
+// CleanupExpiredBlacklistedTokens removes expired tokens from the blacklist
+func (db *DB) CleanupExpiredBlacklistedTokens() error {
+	query := `DELETE FROM token_blacklist WHERE expires_at <= CURRENT_TIMESTAMP`
+	_, err := db.Exec(query)
+	return err
 }
