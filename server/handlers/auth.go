@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"saas-server/database"
@@ -27,81 +28,6 @@ type AuthHandler struct {
 	jwtSecret        []byte
 	jwtRefreshSecret []byte
 	authLimiter      *middleware.RateLimiter
-}
-
-// validateToken validates a JWT token and returns the parsed token if valid
-func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return h.jwtSecret, nil
-	})
-
-	if err != nil {
-		log.Printf("[Auth] Token validation error: %v", err)
-		return nil, err
-	}
-
-	return token, nil
-}
-
-// Logout handles user logout by blacklisting the current token and invalidating refresh tokens
-func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Get token from Authorization header
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
-		return
-	}
-
-	// Remove "Bearer " prefix
-	tokenString := authHeader[7:] // Skip "Bearer " prefix
-
-	// Validate the token
-	token, err := h.validateToken(tokenString)
-	if err != nil {
-		log.Printf("[Auth] Error validating token during logout: %v", err)
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	// Extract claims and blacklist token
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		userID := claims["sub"].(string)
-		jti := claims["jti"].(string)
-		exp := int64(claims["exp"].(float64))
-
-		// Add token to blacklist
-		if err := h.db.AddToBlacklist(jti, userID, time.Unix(exp, 0)); err != nil {
-			log.Printf("[Auth] Error blacklisting token: %v", err)
-			http.Error(w, "Error processing logout", http.StatusInternalServerError)
-			return
-		}
-
-		// Invalidate all refresh tokens for the user
-		if err := h.db.DeleteAllUserRefreshTokens(userID); err != nil {
-			log.Printf("[Auth] Error invalidating refresh tokens: %v", err)
-		}
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully logged out"})
-
-}
-
-// NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
-func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
-	// Create rate limiter for auth endpoints - 5 attempts per minute
-	authLimiter := middleware.NewRateLimiter(time.Minute, 5)
-
-	return &AuthHandler{
-		db:               db,
-		jwtSecret:        []byte(jwtSecret),
-		jwtRefreshSecret: []byte(jwtSecret), // Using same secret for now, could be different in production
-		authLimiter:      authLimiter,
-	}
 }
 
 // RegisterRequest represents the request body for user registration endpoint
@@ -125,7 +51,6 @@ type AuthResponse struct {
 	ExpiresAt    int64  `json:"expiresAt"`    // Access token expiration timestamp
 	Name         string `json:"name"`         // User's display name
 	Email        string `json:"email"`        // User's email address
-	CSRFToken    string `json:"csrfToken"`    // CSRF token for form submissions
 }
 
 // GoogleAuthRequest represents the request body for Google OAuth authentication
@@ -151,23 +76,6 @@ type UpdatePasswordRequest struct {
 	NewPassword     string `json:"newPassword"`     // User's new password
 }
 
-// RefreshTokenRequest represents the request body for token refresh endpoint
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refreshToken"` // Current refresh token
-}
-
-// TokenResponse represents the response body for token refresh operations
-type TokenResponse struct {
-	AccessToken  string `json:"token"`        // New JWT access token
-	RefreshToken string `json:"refreshToken"` // New refresh token
-	ExpiresAt    int64  `json:"expiresAt"`    // New access token expiration timestamp
-}
-
-// LinkedAccountsResponse represents the response for getting linked accounts
-type LinkedAccountsResponse struct {
-	Accounts []models.LinkedAccountResponse `json:"accounts"`
-}
-
 // LinkAccountRequest represents the request for linking a new account
 type LinkAccountRequest struct {
 	Provider string `json:"provider"`
@@ -179,6 +87,11 @@ type LinkAccountRequest struct {
 	} `json:"user"`
 }
 
+// LinkedAccountsResponse represents the response for getting linked accounts
+type LinkedAccountsResponse struct {
+	Accounts []models.LinkedAccountResponse `json:"accounts"`
+}
+
 // RequestPasswordResetRequest represents the request body for password reset request
 type RequestPasswordResetRequest struct {
 	Email string `json:"email"` // User's email address
@@ -188,6 +101,61 @@ type RequestPasswordResetRequest struct {
 type ResetPasswordRequest struct {
 	Token       string `json:"token"`       // Password reset token
 	NewPassword string `json:"newPassword"` // New password to set
+}
+
+// NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
+func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
+	// Create rate limiter for auth endpoints - 5 attempts per minute
+	authLimiter := middleware.NewRateLimiter(time.Minute, 5)
+
+	return &AuthHandler{
+		db:               db,
+		jwtSecret:        []byte(jwtSecret),
+		jwtRefreshSecret: []byte(jwtSecret), // Using same secret for now, could be different in production
+		authLimiter:      authLimiter,
+	}
+}
+
+// validateToken validates a JWT token and returns the parsed token if valid
+func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return h.jwtSecret, nil
+	})
+
+	if err != nil {
+		log.Printf("[Auth] Token validation error: %v", err)
+		return nil, err
+	}
+
+	// Check if token is valid and has required claims
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// Extract token ID and user ID
+		jti, ok1 := claims["jti"].(string)
+		_, ok2 := claims["sub"].(string)
+
+		if !ok1 || !ok2 {
+			log.Printf("[Auth] Token missing required claims")
+			return nil, fmt.Errorf("token missing required claims")
+		}
+
+		// Check if token is blacklisted
+		blacklisted, err := h.db.IsTokenBlacklisted(jti)
+		if err != nil {
+			log.Printf("[Auth] Error checking token blacklist: %v", err)
+			return nil, fmt.Errorf("error checking token blacklist")
+		}
+
+		if blacklisted {
+			log.Printf("[Auth] Token is blacklisted: %s", jti)
+			return nil, fmt.Errorf("token is blacklisted")
+		}
+	}
+
+	return token, nil
 }
 
 // validatePassword checks if a password meets security requirements
@@ -286,18 +254,46 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate refresh token
-	refreshToken := uuid.New().String()
+	// Generate refresh token with JWT claims
+	refreshExp := time.Now().Add(7 * 24 * time.Hour)
+	refreshJti := uuid.New().String()
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":  user.ID,
+		"exp":  refreshExp.Unix(),
+		"jti":  refreshJti,
+		"type": "refresh",
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
+	if err != nil {
+		log.Printf("[Auth] Error generating refresh token: %v", err)
+		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	// Get device info and IP address
+	userAgent := r.Header.Get("User-Agent")
+	ipAddress := r.Header.Get("X-Forwarded-For")
+	if ipAddress == "" {
+		ipAddress = r.RemoteAddr
+	}
+
+	// Store refresh token in database with device info
+	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
+		log.Printf("[Auth] Error storing refresh token: %v", err)
+		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
+		return
+	}
 
 	// Set refresh token in HTTP-only cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
-		Value:    refreshToken,
+		Value:    refreshTokenString,
 		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		Expires:  refreshExp,
 	})
 
 	// Set CSRF token cookie (not HTTP-only so JS can read it)
@@ -319,7 +315,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: accessExp.Unix(),
 		Name:      user.Name,
 		Email:     user.Email,
-		CSRFToken: csrfToken,
 	}
 	log.Printf("[Auth] Registration response: %+v", response)
 	w.Header().Set("Content-Type", "application/json")
@@ -376,18 +371,46 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate refresh token
-	refreshToken := uuid.New().String()
+	// Generate refresh token with JWT claims
+	refreshExp := time.Now().Add(7 * 24 * time.Hour)
+	refreshJti := uuid.New().String()
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":  user.ID,
+		"exp":  refreshExp.Unix(),
+		"jti":  refreshJti,
+		"type": "refresh",
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
+	if err != nil {
+		log.Printf("[Auth] Error generating refresh token: %v", err)
+		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	// Get device info and IP address
+	userAgent := r.Header.Get("User-Agent")
+	ipAddress := r.Header.Get("X-Forwarded-For")
+	if ipAddress == "" {
+		ipAddress = r.RemoteAddr
+	}
+
+	// Store refresh token in database with device info
+	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
+		log.Printf("[Auth] Error storing refresh token: %v", err)
+		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
+		return
+	}
 
 	// Set refresh token in HTTP-only cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
-		Value:    refreshToken,
+		Value:    refreshTokenString,
 		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		Expires:  refreshExp,
 	})
 
 	// Set CSRF token cookie (not HTTP-only so JS can read it)
@@ -409,7 +432,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: accessExp.Unix(),
 		Name:      user.Name,
 		Email:     user.Email,
-		CSRFToken: csrfToken,
 	}
 
 	log.Printf("[Auth] Login response: %+v", response)
@@ -486,8 +508,23 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate refresh token
-	refreshToken := uuid.New().String()
+	// Generate refresh token with JWT claims
+	refreshExp := time.Now().Add(7 * 24 * time.Hour)
+	refreshJti := uuid.New().String()
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":  user.ID,
+		"exp":  refreshExp.Unix(),
+		"jti":  refreshJti,
+		"type": "refresh",
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
+	if err != nil {
+		log.Printf("[Auth] Error generating refresh token: %v", err)
+		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
+		return
+	}
+
 	// Get device info and IP address
 	userAgent := r.Header.Get("User-Agent")
 	ipAddress := r.Header.Get("X-Forwarded-For")
@@ -495,24 +532,234 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		ipAddress = r.RemoteAddr
 	}
 
-	if err := h.db.CreateRefreshToken(user.ID, refreshToken, userAgent, ipAddress, time.Now().Add(7*24*time.Hour)); err != nil {
-		log.Printf("[Auth] Error generating refresh token: %v", err)
-		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
+	// Store refresh token in database with device info
+	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
+		log.Printf("[Auth] Error storing refresh token: %v", err)
+		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
 		return
 	}
 
+	// Set refresh token in HTTP-only cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshTokenString,
+		Path:     "/api/auth",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  refreshExp,
+	})
+
+	// Generate CSRF token
+	csrfToken := uuid.New().String()
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    csrfToken,
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  refreshExp,
+	})
+
 	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
 	response := AuthResponse{
-		ID:           user.ID,
-		Token:        tokenString,
-		RefreshToken: refreshToken,
-		ExpiresAt:    accessExp.Unix(),
-		Name:         user.Name,
-		Email:        user.Email,
+		ID:        user.ID,
+		Token:     tokenString,
+		ExpiresAt: accessExp.Unix(),
+		Name:      user.Name,
+		Email:     user.Email,
 	}
 	log.Printf("[Auth] Google auth response: %+v", response)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// RefreshToken handles token refresh endpoint (POST /auth/refresh)
+// It validates the refresh token and issues new access and refresh tokens
+func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	// Apply stricter rate limiting for refresh token endpoint - 3 attempts per 5 minutes
+	refreshLimiter := middleware.NewRateLimiter(5*time.Minute, 3)
+	handler := refreshLimiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get old access token from Authorization header
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "" {
+			// Extract and blacklist the old access token
+			oldTokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			if oldToken, err := jwt.Parse(oldTokenString, func(token *jwt.Token) (interface{}, error) {
+				return h.jwtSecret, nil
+			}); err == nil && oldToken.Valid {
+				if claims, ok := oldToken.Claims.(jwt.MapClaims); ok {
+					if jti, ok := claims["jti"].(string); ok {
+						userID := claims["sub"].(string)
+						exp := int64(claims["exp"].(float64))
+						// Add old token to blacklist
+						if err := h.db.AddToBlacklist(jti, userID, time.Unix(exp, 0)); err != nil {
+							log.Printf("[Auth] Error blacklisting old access token: %v", err)
+						}
+					}
+				}
+			}
+		}
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Extract refresh token from HTTP-only cookie
+		cookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			http.Error(w, "Refresh token not found", http.StatusUnauthorized)
+			return
+		}
+
+		// Verify CSRF token
+		csrfToken := r.Header.Get("X-CSRF-Token")
+		csrfCookie, err := r.Cookie("csrf_token")
+		if err != nil || csrfToken == "" || csrfToken != csrfCookie.Value {
+			http.Error(w, "Invalid CSRF token", http.StatusUnauthorized)
+			return
+		}
+
+		// Get device info and IP address
+		deviceInfo := r.Header.Get("User-Agent")
+		ipAddress := r.RemoteAddr
+		if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+			ipAddress = forwardedFor
+		}
+
+		// Verify refresh token
+		claims := jwt.MapClaims{}
+		token, err := jwt.ParseWithClaims(cookie.Value, claims, func(token *jwt.Token) (interface{}, error) {
+			return h.jwtRefreshSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		userID, ok := claims["sub"].(string)
+		if !ok {
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		// Generate new tokens with enhanced security
+		accessExp := time.Now().Add(15 * time.Minute)
+
+		// Generate JTI for token tracking
+		jti := uuid.New().String()
+
+		// Create new access token with minimal claims
+		accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub":  userID,
+			"exp":  accessExp.Unix(),
+			"jti":  jti,
+			"type": "access",
+		})
+
+		accessTokenString, err := accessToken.SignedString(h.jwtSecret)
+		if err != nil {
+			http.Error(w, "Error generating access token", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate new refresh token with device binding
+		refreshExp := time.Now().Add(7 * 24 * time.Hour)
+		refreshTokenString := uuid.New().String()
+
+		// Store refresh token in database with device info
+		if err := h.db.CreateRefreshToken(userID, refreshTokenString, deviceInfo, ipAddress, refreshExp); err != nil {
+			http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
+			return
+		}
+
+		// Set new refresh token in HTTP-only cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    refreshTokenString,
+			Path:     "/api/auth",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Expires:  refreshExp,
+		})
+
+		// Generate new CSRF token
+		newCSRFToken := uuid.New().String()
+		http.SetCookie(w, &http.Cookie{
+			Name:     "csrf_token",
+			Value:    newCSRFToken,
+			Path:     "/",
+			HttpOnly: false,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Expires:  refreshExp,
+		})
+
+		// Get user details for response
+		user, err := h.db.GetUserByID(userID)
+		if err != nil {
+			http.Error(w, "Error fetching user details", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(AuthResponse{
+			ID:        userID,
+			Token:     accessTokenString,
+			ExpiresAt: accessExp.Unix(),
+			Name:      user.Name,
+			Email:     user.Email,
+		})
+	}))
+	handler.ServeHTTP(w, r)
+}
+
+// Logout handles user logout by blacklisting the current token and invalidating refresh tokens
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Get token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+
+	// Remove "Bearer " prefix
+	tokenString := authHeader[7:] // Skip "Bearer " prefix
+
+	// Validate the token
+	token, err := h.validateToken(tokenString)
+	if err != nil {
+		log.Printf("[Auth] Error validating token during logout: %v", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract claims and blacklist token
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		userID := claims["sub"].(string)
+		jti := claims["jti"].(string)
+		exp := int64(claims["exp"].(float64))
+
+		// Add token to blacklist
+		if err := h.db.AddToBlacklist(jti, userID, time.Unix(exp, 0)); err != nil {
+			log.Printf("[Auth] Error blacklisting token: %v", err)
+			http.Error(w, "Error processing logout", http.StatusInternalServerError)
+			return
+		}
+
+		// Invalidate all refresh tokens for the user
+		if err := h.db.DeleteAllUserRefreshTokens(userID); err != nil {
+			log.Printf("[Auth] Error invalidating refresh tokens: %v", err)
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully logged out"})
+
 }
 
 // UpdateProfile handles user profile update endpoint (PUT /user/profile)
@@ -632,126 +879,6 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Password updated successfully. Please log in again with your new password.",
 	})
-}
-
-// RefreshToken handles token refresh endpoint (POST /auth/refresh)
-// It validates the refresh token and issues new access and refresh tokens
-func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	// Apply stricter rate limiting for refresh token endpoint - 3 attempts per 5 minutes
-	refreshLimiter := middleware.NewRateLimiter(5*time.Minute, 3)
-	handler := refreshLimiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Extract refresh token from HTTP-only cookie
-		cookie, err := r.Cookie("refresh_token")
-		if err != nil {
-			http.Error(w, "Refresh token not found", http.StatusUnauthorized)
-			return
-		}
-
-		// Verify CSRF token
-		csrfToken := r.Header.Get("X-CSRF-Token")
-		csrfCookie, err := r.Cookie("csrf_token")
-		if err != nil || csrfToken == "" || csrfToken != csrfCookie.Value {
-			http.Error(w, "Invalid CSRF token", http.StatusUnauthorized)
-			return
-		}
-
-		// Verify refresh token
-		claims := jwt.MapClaims{}
-		token, err := jwt.ParseWithClaims(cookie.Value, claims, func(token *jwt.Token) (interface{}, error) {
-			return h.jwtRefreshSecret, nil
-		})
-
-		if err != nil || !token.Valid {
-			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
-			return
-		}
-
-		userID, ok := claims["sub"].(string)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-
-		// Generate new tokens with enhanced security
-		accessExp := time.Now().Add(15 * time.Minute)
-
-		// Generate JTI for token tracking
-		jti := uuid.New().String()
-
-		// Create new access token with minimal claims
-		accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"sub":  userID,
-			"exp":  accessExp.Unix(),
-			"jti":  jti,
-			"type": "access",
-		})
-
-		accessTokenString, err := accessToken.SignedString(h.jwtSecret)
-		if err != nil {
-			http.Error(w, "Error generating access token", http.StatusInternalServerError)
-			return
-		}
-
-		// Generate new refresh token
-		newRefreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"sub":  userID,
-			"exp":  time.Now().Add(7 * 24 * time.Hour).Unix(),
-			"jti":  uuid.New().String(),
-			"type": "refresh",
-		})
-
-		refreshTokenString, err := newRefreshToken.SignedString(h.jwtRefreshSecret)
-		if err != nil {
-			http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
-			return
-		}
-
-		// Set new refresh token in HTTP-only cookie
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    refreshTokenString,
-			Path:     "/api/auth",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			Expires:  time.Now().Add(7 * 24 * time.Hour),
-		})
-
-		// Generate new CSRF token
-		newCSRFToken := uuid.New().String()
-		http.SetCookie(w, &http.Cookie{
-			Name:     "csrf_token",
-			Value:    newCSRFToken,
-			Path:     "/",
-			HttpOnly: false,
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			Expires:  time.Now().Add(7 * 24 * time.Hour),
-		})
-
-		// Get user details for response
-		user, err := h.db.GetUserByID(userID)
-		if err != nil {
-			http.Error(w, "Error fetching user details", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(AuthResponse{
-			ID:        userID,
-			Token:     accessTokenString,
-			ExpiresAt: accessExp.Unix(),
-			Name:      user.Name,
-			Email:     user.Email,
-			CSRFToken: newCSRFToken,
-		})
-	}))
-	handler.ServeHTTP(w, r)
 }
 
 // GetLinkedAccounts handles retrieving all linked accounts for a user (GET /auth/linked-accounts)
