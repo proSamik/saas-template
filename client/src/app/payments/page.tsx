@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
-import api from '@/lib/axios';
+import { authService } from '@/services/auth';
 
+// Types
 interface ProductAttributes {
   name: string;
   description: string;
@@ -44,21 +45,23 @@ interface ProductsResponse {
   data: Product[];
 }
 
+// Component
 const PaymentsPage = () => {
-  const { data: session } = useSession();
+  const { user, isAuthenticated } = useAuth();
   const router = useRouter();
   const [loadingStates, setLoadingStates] = useState<Map<string, boolean>>(new Map());
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch products on component mount
   useEffect(() => {
     const fetchProducts = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const { data } = await api.get<ProductsResponse>('/api/products');
-        setProducts(data.data);
+        const response = await authService.get<ProductsResponse>('/api/products');
+        setProducts(response.data);
       } catch (error: any) {
         console.error('Error fetching products:', error);
         setError(error?.response?.data?.message || 'Failed to load products. Please try again later.');
@@ -70,25 +73,37 @@ const PaymentsPage = () => {
     fetchProducts();
   }, []);
 
-  const handleSubscribe = async (productId: string, variantId: string) => {
+  // Handle product purchase/subscription
+  const handlePurchase = async (productId: string, variantId: string) => {
     if (!variantId) {
       toast.error('This product is currently unavailable for purchase');
       return;
     }
 
+    // If user is not authenticated, redirect to login
+    if (!isAuthenticated) {
+      // Store the product info in sessionStorage for after login
+      sessionStorage.setItem('pendingPurchase', JSON.stringify({ productId, variantId }));
+      router.push('/auth/login');
+      return;
+    }
+
+    // Proceed with checkout for authenticated users
     setLoadingStates(prevStates => {
       const newStates = new Map(prevStates);
       newStates.set(productId, true);
       return newStates;
     });
+
     try {
-      const { data } = await api.post('/api/checkout', {
+      const response = await authService.post('/api/checkout', {
         productId,
         variantId,
-        email: session?.user?.email,
-        userId: session?.user?.id,
+        email: user?.email,
+        userId: user?.id,
       });
-      
+
+      const data = response.data;
       if (data.checkoutURL) {
         window.open(data.checkoutURL, '_blank');
       }
@@ -104,10 +119,20 @@ const PaymentsPage = () => {
     }
   };
 
-  if (!session) {
+  // Loading state
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p>Please sign in to access this page</p>
+        <div className="text-lg">Loading products...</div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-red-500">{error}</div>
       </div>
     );
   }
@@ -118,10 +143,11 @@ const PaymentsPage = () => {
       
       <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
         {products.map((product) => {
-                    const productVariant = product.relationships?.variants?.data 
-                    ? product.relationships.variants.data.find(variant => variant.attributes?.status === 'published') || null 
-                    : null;
+          const productVariant = product.relationships?.variants?.data
+            ? product.relationships.variants.data.find(variant => variant.attributes?.status === 'published') || null
+            : null;
           const isAvailable = product.attributes.status === 'published' && productVariant !== null;
+          
           return (
             <div key={product.id} className="rounded-lg border p-6 shadow-lg">
               {product.attributes.thumb_url && (
@@ -138,12 +164,12 @@ const PaymentsPage = () => {
               />
               <p className="mb-6 text-2xl font-bold">{product.attributes.price_formatted}</p>
               <button
-                onClick={() => handleSubscribe(product.id, productVariant?.id || '')}
+                onClick={() => handlePurchase(product.id, productVariant?.id || '')}
                 disabled={loadingStates.get(product.id) || !isAvailable}
                 className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {loadingStates.get(product.id) 
-                  ? 'Processing...' 
+                {loadingStates.get(product.id)
+                  ? 'Processing...'
                   : !isAvailable
                     ? 'Currently Unavailable'
                     : product.attributes.price_formatted.includes('/month')
