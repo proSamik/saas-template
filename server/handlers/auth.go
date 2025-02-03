@@ -45,11 +45,11 @@ type LoginRequest struct {
 
 // AuthResponse represents the response body for successful authentication operations
 type AuthResponse struct {
-	ID           string `json:"id"`           // User's unique identifier
-	Token        string `json:"token"`        // JWT access token
-	ExpiresAt    int64  `json:"expiresAt"`    // Access token expiration timestamp
-	Name         string `json:"name"`         // User's display name
-	Email        string `json:"email"`        // User's email address
+	ID        string `json:"id"`        // User's unique identifier
+	Token     string `json:"token"`     // JWT access token
+	ExpiresAt int64  `json:"expiresAt"` // Access token expiration timestamp
+	Name      string `json:"name"`      // User's display name
+	Email     string `json:"email"`     // User's email address
 }
 
 // GoogleAuthRequest represents the request body for Google OAuth authentication
@@ -518,6 +518,10 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	// Apply stricter rate limiting for refresh token endpoint - 3 attempts per 5 minutes
 	refreshLimiter := middleware.NewRateLimiter(5*time.Minute, 3)
 	handler := refreshLimiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Log request details
+		log.Printf("[Auth] Refresh token request received from IP: %s", r.RemoteAddr)
+		log.Printf("[Auth] Request cookies: %+v", r.Cookies())
+
 		// Get old access token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
@@ -540,6 +544,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if r.Method != http.MethodPost {
+			log.Printf("[Auth] Invalid method: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -547,14 +552,18 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		// Extract refresh token from HTTP-only cookie
 		cookie, err := r.Cookie("refresh_token")
 		if err != nil {
+			log.Printf("[Auth] Refresh token cookie not found: %v", err)
 			http.Error(w, "Refresh token not found", http.StatusUnauthorized)
 			return
 		}
+		log.Printf("[Auth] Refresh token cookie found: %s", cookie.Value)
 
 		// Verify CSRF token
 		csrfToken := r.Header.Get("X-CSRF-Token")
 		csrfCookie, err := r.Cookie("csrf_token")
 		if err != nil || csrfToken == "" || csrfToken != csrfCookie.Value {
+			log.Printf("[Auth] CSRF validation failed - Token: %s, Cookie: %v, Error: %v",
+				csrfToken, csrfCookie, err)
 			http.Error(w, "Invalid CSRF token", http.StatusUnauthorized)
 			return
 		}
