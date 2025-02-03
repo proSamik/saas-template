@@ -1,6 +1,5 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Navigation } from '@/components/Navigation'
@@ -9,17 +8,22 @@ import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import LinkedAccounts from '@/components/LinkedAccounts'
 import api from '@/lib/axios'
+import useAuthStore from '@/lib/store'
 import toast from 'react-hot-toast'
 
-/**
- * Settings page component that allows users to edit their profile
- * Protected route that requires authentication
- */
+interface FormData {
+  name: string
+  email: string
+  currentPassword: string
+  newPassword: string
+  confirmPassword: string
+}
+
 export default function Settings() {
-  const { data: session, status, update: updateSession } = useSession()
   const router = useRouter()
+  const { user, accessToken, updateUser } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
     currentPassword: '',
@@ -28,17 +32,19 @@ export default function Settings() {
   })
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!accessToken) {
       router.push('/auth/login')
+      return
     }
-    if (session?.user) {
+
+    if (user) {
       setFormData(prev => ({
         ...prev,
-        name: session.user.name || '',
-        email: session.user.email || '',
+        name: user.name || '',
+        email: user.email || '',
       }))
     }
-  }, [status, router, session])
+  }, [accessToken, router, user])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -50,18 +56,15 @@ export default function Settings() {
     setIsLoading(true)
 
     try {
-      const response = await api.put('/user/profile', {
+      const response = await api.put('/api/user/profile', {
         name: formData.name,
         email: formData.email,
       })
 
-      await updateSession({
-        ...session,
-        user: {
-          ...session?.user,
-          name: formData.name,
-          email: formData.email,
-        },
+      updateUser({
+        ...user!,
+        name: formData.name,
+        email: formData.email,
       })
 
       toast.success('Profile updated successfully')
@@ -82,7 +85,7 @@ export default function Settings() {
     setIsLoading(true)
 
     try {
-      await api.put('/user/password', {
+      await api.put('/api/user/password', {
         currentPassword: formData.currentPassword,
         newPassword: formData.newPassword,
       })
@@ -101,7 +104,7 @@ export default function Settings() {
     }
   }
 
-  if (status === 'loading') {
+  if (!accessToken || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-light-background dark:bg-dark-background">
         <div className="text-center">
@@ -110,10 +113,6 @@ export default function Settings() {
         </div>
       </div>
     )
-  }
-
-  if (!session) {
-    return null
   }
 
   return (
@@ -218,7 +217,6 @@ export default function Settings() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
           </main>
@@ -226,4 +224,4 @@ export default function Settings() {
       </div>
     </div>
   )
-} 
+}

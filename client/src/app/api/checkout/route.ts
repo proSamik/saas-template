@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '../auth/[...nextauth]/route';
 import api from '@/lib/axios';
+import useAuthStore from '@/lib/store';
 
 export async function POST(request: Request) {
   try {
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
     }
 
     const { email, productId, variantId, userId } = await request.json();
-
+    const accessToken = useAuthStore.getState().accessToken;
     const response = await api.post('/api/checkout', {
       email,
       productId,
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
       userId
     }, {
       headers: {
-        'Authorization': `Bearer ${session.accessToken}`
+        'Authorization': `Bearer ${accessToken}`
       }
     });
 

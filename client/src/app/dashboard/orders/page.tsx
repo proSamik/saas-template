@@ -1,11 +1,11 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
 import api from '@/lib/axios'
+import { useAuth } from '@/lib/useAuth'
 
 interface Order {
   id: number
@@ -22,20 +22,20 @@ interface Order {
 }
 
 export default function Orders() {
-  const { data: session, status } = useSession()
+  const { isAuthenticated, loading } = useAuth()
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!isAuthenticated && !loading) {
       router.push('/auth/login')
     }
-  }, [status, router])
+  }, [isAuthenticated, loading, router])
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (session?.user?.id && !session?.error) {
+      if (isAuthenticated) {
         try {
           const response = await api.get('/api/user/orders')
           setOrders(response.data?.orders || [])
@@ -43,17 +43,17 @@ export default function Orders() {
           console.error('Error fetching orders:', error)
           setOrders([])
         } finally {
-          setLoading(false)
+          setIsLoading(false)
         }
       } else {
-        setLoading(false)
+        setIsLoading(false)
       }
     }
 
     fetchOrders()
-  }, [session?.user?.id, session?.error])
+  }, [isAuthenticated])
 
-  if (status === 'loading' || loading) {
+  if (loading || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-light-background dark:bg-dark-background">
         <div className="text-center">
@@ -64,7 +64,7 @@ export default function Orders() {
     )
   }
 
-  if (!session) {
+  if (!isAuthenticated) {
     return null
   }
 

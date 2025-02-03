@@ -1,27 +1,26 @@
 'use client'
 
-import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ThemeToggle } from './ThemeToggle'
 import { useState, useRef, useEffect } from 'react'
 import { UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
+import useAuthStore from '@/lib/store'
 
 /**
  * Navigation component that displays the top navigation bar
  * with authentication state and theme toggle
  */
 export function Navigation() {
-  const { data: session, status } = useSession({
-    required: false
-  })
+  const { user, accessToken } = useAuthStore()
+  const { clearAuth } = useAuthStore()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const handleSignOut = async () => {
-    const data = await signOut({ redirect: false, callbackUrl: '/' })
-    router.push(data.url)
+    clearAuth()
+    router.push('/')
   }
 
   // Close dropdown when clicking outside
@@ -77,7 +76,7 @@ export function Navigation() {
               >
                 Demo
               </button>
-              {session && (
+              {accessToken && (
                 <Link
                   href="/dashboard"
                   className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
@@ -103,36 +102,31 @@ export function Navigation() {
                 <Bars3Icon className="h-6 w-6" />
               )}
             </button>
-            
-            {/* Auth Section */}
-            {session ? (
+
+            {/* User Menu */}
+            {accessToken ? (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsOpen(!isOpen)}
-                  className="flex items-center gap-2 rounded-md p-2 hover:bg-light-accent dark:hover:bg-dark-accent cursor-pointer"
+                  className="flex items-center space-x-2 text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
                 >
                   <UserCircleIcon className="h-6 w-6" />
-                  <span className="text-light-foreground dark:text-dark-foreground">
-                    {session.user?.name}
-                  </span>
+                  <span className="hidden md:inline">{user?.name || 'User'}</span>
                 </button>
 
                 {isOpen && (
-                  <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-light-background dark:bg-dark-background border border-light-accent dark:border-dark-accent shadow-lg focus:outline-none z-50">
+                  <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5">
                     <div className="py-1">
                       <Link
-                        href="/dashboard"
-                        className="block px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent transition-colors"
+                        href="/dashboard/settings"
+                        className="block px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
                         onClick={() => setIsOpen(false)}
                       >
-                        Dashboard
+                        Settings
                       </Link>
                       <button
-                        onClick={() => {
-                          setIsOpen(false)
-                          handleSignOut()
-                        }}
-                        className="block w-full text-left px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent transition-colors"
+                        onClick={handleSignOut}
+                        className="block w-full text-left px-4 py-2 text-sm text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent"
                       >
                         Sign out
                       </button>
@@ -141,36 +135,28 @@ export function Navigation() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-4">
-                <Link
-                  href="/auth/login"
-                  className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/auth/signup"
-                  className="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 transition-colors"
-                >
-                  Sign up
-                </Link>
-              </div>
+              <Link
+                href="/auth/login"
+                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
+              >
+                Sign in
+              </Link>
             )}
           </div>
         </div>
 
         {/* Mobile menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden absolute top-16 inset-x-0 bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent">
-            <div className="space-y-1 px-4 py-4">
+          <div className="md:hidden absolute top-16 inset-x-0 bg-white dark:bg-gray-800 border-b border-light-accent dark:border-dark-accent">
+            <div className="px-2 pt-2 pb-3 space-y-1">
               <button
                 onClick={() => {
+                  setIsMobileMenuOpen(false)
                   if (window.location.pathname === '/') {
                     document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' })
                   } else {
                     router.push('/#pricing')
                   }
-                  setIsMobileMenuOpen(false)
                 }}
                 className="block w-full text-left px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
               >
@@ -178,22 +164,22 @@ export function Navigation() {
               </button>
               <button
                 onClick={() => {
+                  setIsMobileMenuOpen(false)
                   if (window.location.pathname === '/') {
                     document.querySelector('#demo')?.scrollIntoView({ behavior: 'smooth' })
                   } else {
                     router.push('/#demo')
                   }
-                  setIsMobileMenuOpen(false)
                 }}
                 className="block w-full text-left px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
               >
                 Demo
               </button>
-              {session && (
+              {accessToken && (
                 <Link
                   href="/dashboard"
-                  className="block px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
                   onClick={() => setIsMobileMenuOpen(false)}
+                  className="block px-3 py-2 text-base font-medium text-light-foreground dark:text-dark-foreground hover:bg-light-accent dark:hover:bg-dark-accent rounded-md"
                 >
                   Dashboard
                 </Link>

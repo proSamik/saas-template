@@ -1,11 +1,11 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Navigation } from '@/components/Navigation'
 import { Sidebar } from '@/components/Sidebar'
 import api from '@/lib/axios'
+import useAuthStore from '@/lib/store'
 
 interface Subscription {
   id: number
@@ -25,20 +25,20 @@ interface Subscription {
 }
 
 export default function Subscriptions() {
-  const { data: session, status } = useSession()
   const router = useRouter()
+  const { accessToken, user } = useAuthStore()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!accessToken) {
       router.push('/auth/login')
     }
-  }, [status, router])
+  }, [accessToken, router])
 
   useEffect(() => {
     const fetchSubscription = async () => {
-      if (session?.user?.id && !session?.error) {
+      if (user?.id && accessToken) {
         try {
           const response = await api.get('/api/user/subscription')
           setSubscription(response.data || null)
@@ -49,14 +49,14 @@ export default function Subscriptions() {
           setLoading(false)
         }
       } else {
-          setLoading(false)
-        }
+        setLoading(false)
+      }
     }
 
     fetchSubscription()
-  }, [session?.user?.id, session?.error])
+  }, [user?.id, accessToken])
 
-  if (status === 'loading' || loading) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-light-background dark:bg-dark-background">
         <div className="text-center">
@@ -67,7 +67,7 @@ export default function Subscriptions() {
     )
   }
 
-  if (!session) {
+  if (!accessToken) {
     return null
   }
 

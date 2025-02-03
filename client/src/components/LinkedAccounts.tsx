@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { signIn, useSession } from 'next-auth/react'
+import useAuthStore from '@/lib/store'
 import axios from '@/lib/axios'
 import { Button } from '@/components/Button'
 
@@ -12,7 +12,7 @@ interface LinkedAccount {
 }
 
 export default function LinkedAccounts() {
-  const { data: session } = useSession()
+  const { user } = useAuthStore()
   const [accounts, setAccounts] = useState<LinkedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -36,11 +36,11 @@ export default function LinkedAccounts() {
 
   const handleLink = async (provider: string) => {
     try {
-      await signIn(provider, {
-        redirect: false,
-        callbackUrl: window.location.href,
-        trigger: 'link'
-      })
+      // Redirect to the OAuth provider's authorization URL
+      const response = await axios.post(`/auth/oauth/${provider}/link`)
+      if (response.data.authUrl) {
+        window.location.href = response.data.authUrl
+      }
     } catch (err: any) {
       setError('Failed to link account')
       console.error('Error linking account:', err)
@@ -76,7 +76,7 @@ export default function LinkedAccounts() {
         <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow">
           <div>
             <h3 className="font-medium">Email/Password</h3>
-            <p className="text-sm text-gray-500">{session?.user?.email}</p>
+            <p className="text-sm text-gray-500">{user?.email}</p>
           </div>
           <div className="text-sm text-gray-500">Primary Account</div>
         </div>
@@ -110,4 +110,4 @@ export default function LinkedAccounts() {
       </div>
     </div>
   )
-} 
+}

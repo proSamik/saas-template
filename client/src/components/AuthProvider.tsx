@@ -1,15 +1,21 @@
 'use client'
 
-import { SessionProvider } from 'next-auth/react'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import useAuthStore from '@/lib/store'
+import api from '@/lib/axios'
+import { useAuth } from '@/lib/useAuth'
 
 /**
- * AuthProvider component that wraps the application with NextAuth's SessionProvider
- * to enable authentication state management
+ * AuthProvider component that manages JWT-based authentication state
+ * and handles token refresh
  */
 export default function AuthProvider({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return <SessionProvider>{children}</SessionProvider>
-} 
+  // Use the enhanced useAuth hook for authentication logic
+  useAuth()
+  return <>{children}</>
+}

@@ -1,6 +1,7 @@
 'use client'
 
-import { signIn } from 'next-auth/react'
+import api from '@/lib/axios'
+import { useRouter } from 'next/navigation'
 
 type SocialButtonProps = {
   provider: string
@@ -14,6 +15,8 @@ type SocialButtonProps = {
  * Provides a consistent style for all social login buttons
  */
 export function SocialButton({ provider, icon, children, onClick }: SocialButtonProps) {
+  const router = useRouter()
+
   const handleClick = async () => {
     console.log('[SocialButton] Clicked:', provider)
     if (onClick) {
@@ -21,9 +24,9 @@ export function SocialButton({ provider, icon, children, onClick }: SocialButton
     } else {
       console.log('[SocialButton] Using default sign in')
       try {
-        const result = await signIn(provider, { callbackUrl: '/dashboard' })
-        if (result?.error) {
-          console.error('[SocialButton] Sign in failed:', result.error)
+        const response = await api.post(`/auth/oauth/${provider}`)
+        if (response.data.authUrl) {
+          window.location.href = response.data.authUrl
         }
       } catch (error) {
         console.error('[SocialButton] Sign in error:', error)
@@ -40,4 +43,4 @@ export function SocialButton({ provider, icon, children, onClick }: SocialButton
       <span className="text-sm font-semibold leading-6">{children}</span>
     </button>
   )
-} 
+}

@@ -10,34 +10,18 @@ declare module 'axios' {
  * 
  * This module exports a configured Axios instance that:
  * - Uses the API URL from environment variables as the base URL
- * - Automatically adds JWT authentication tokens from the NextAuth session
- * - Handles request/response interceptors for authentication
- * - Includes error handling and environment validation
+ * - Handles access tokens in memory and refresh tokens via HTTP-only cookies
+ * - Implements automatic token refresh with request queueing
+ * - Includes robust error handling and retry mechanisms
  */
 
 import axios, { AxiosError } from 'axios';
-import { getSession } from 'next-auth/react';
-import { Session } from 'next-auth';
-
-// Extend the built-in session type
-declare module 'next-auth' {
-  interface Session {
-    user: {
-      id: string
-      email: string
-      name: string
-      accessToken?: string
-      refreshToken?: string
-      provider?: string
-    }
-    error?: string
-  }
-}
+import useAuthStore from './store';
 
 // Define API response types
 interface TokenRefreshResponse {
   token: string;
-  refreshToken: string;
+  expiresAt: number;
 }
 
 interface APIErrorResponse {
@@ -75,25 +59,41 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Required for cookies
 });
 
 // Add request interceptor to handle authentication
 api.interceptors.request.use(async (config) => {
   try {
-    // Get the current session from NextAuth
-    const session = await getSession();
-    
-    if (session?.user?.accessToken) {
-      config.headers.Authorization = `Bearer ${session.user.accessToken}`;
+    // Get access token from memory store
+    const accessToken = useAuthStore.getState().accessToken;
+    if (accessToken) {
+      console.log('[API Debug] Adding auth token to request:', {
+        url: config.url,
+        method: config.method,
+        tokenPresent: !!accessToken
+      });
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    } else {
+      console.log('[API Debug] No access token found for request:', {
+        url: config.url,
+        method: config.method
+      });
     }
-    
+
+    // Add CSRF token if available
+    const csrfToken = document.cookie.match('(^|;)\\s*csrf_token\\s*=\\s*([^;]+)');
+    if (csrfToken) {
+      config.headers['X-CSRF-Token'] = csrfToken[2];
+    }
+
     return config;
   } catch (error) {
-    console.error('Error in request interceptor:', error);
+    console.error('[API Debug] Error in request interceptor:', error);
     return Promise.reject(error);
   }
 }, (error) => {
-  console.error('Request interceptor error:', error);
+  console.error('[API Debug] Request interceptor error:', error);
   return Promise.reject(error);
 });
 
@@ -105,13 +105,26 @@ const maxBackoffDelay = 10000; // Maximum delay cap of 10 seconds
 
 // Add response interceptor for error handling
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('[API Debug] Response received:', {
+      url: response.config.url,
+      status: response.status,
+      statusText: response.statusText
+    });
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config;
     
     if (!originalRequest) {
       return Promise.reject(error);
     }
+
+    console.log('[API Debug] Response error:', {
+      url: originalRequest.url,
+      status: error.response?.status,
+      message: error.message
+    });
 
     // Generate a unique key for the request
     const requestKey = `${originalRequest.method}-${originalRequest.url}`;
@@ -122,62 +135,43 @@ api.interceptors.response.use(
       // Check if the error indicates a blacklisted or invalid token
       const errorMessage = (error.response.data as APIErrorResponse)?.message || '';
       if (errorMessage.includes('revoked') || errorMessage.includes('invalid token binding')) {
-        // Token is blacklisted or invalidated due to suspicious activity
-        const { signOut } = await import('next-auth/react');
-        await signOut({ redirect: true, callbackUrl: '/auth/login' });
+        console.log('[API Debug] Token invalidated:', errorMessage);
+        useAuthStore.getState().clearAuth();
+        window.location.href = '/auth/login';
         return Promise.reject(new Error('Session invalidated. Please log in again.'));
       }
 
       // Only attempt token refresh if not already retrying and not in refresh process
       if (!originalRequest._retry && !isRefreshing) {
+        console.log('[API Debug] Initiating token refresh');
         originalRequest._retry = true;
         isRefreshing = true;
 
         try {
-          const session = await getSession();
-          if (!session?.user?.refreshToken || !session?.user?.provider) {
-            throw new Error('No refresh token or provider available');
-          }
-
           const response = await axios.post<TokenRefreshResponse>(
             `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
-            {
-              refreshToken: session.user.refreshToken,
-              provider: session.user.provider
-            },
+            {},
             {
               headers: {
                 'User-Agent': window.navigator.userAgent
-              }
+              },
+              withCredentials: true
             }
           );
 
-          const { signIn } = await import('next-auth/react');
-          await signIn('credentials', {
-            redirect: false,
-            accessToken: response.data.token,
-            refreshToken: response.data.refreshToken
-          });
-
+          console.log('[API Debug] Token refresh successful');
+          useAuthStore.getState().setAccessToken(response.data.token);
           originalRequest.headers.Authorization = `Bearer ${response.data.token}`;
           processQueue(null, response.data.token);
           return api(originalRequest);
         } catch (refreshError) {
+          console.error('[API Debug] Token refresh failed:', refreshError);
           processQueue(refreshError as Error);
+          useAuthStore.getState().clearAuth();
+          window.location.href = '/auth/login';
           return Promise.reject(refreshError);
         } finally {
           isRefreshing = false;
-        }
-      } else if (isRefreshing) {
-        // Queue the request if a refresh is in progress
-        try {
-          const token = await new Promise((resolve, reject) => {
-            failedQueue.push({ resolve, reject });
-          });
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        } catch (err) {
-          return Promise.reject(err);
         }
       }
     }
