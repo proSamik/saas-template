@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"saas-server/database"
 
@@ -41,22 +40,22 @@ func NewAuthMiddleware(db *database.DB, jwtSecret string) *AuthMiddleware {
 // If the token is valid, it adds the user ID to the request context
 func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set JSON content type for all responses
-		w.Header().Set("Content-Type", "application/json")
+		// Log request details
+		log.Printf("[Auth Middleware] Request received - Method: %s, Path: %s", r.Method, r.URL.Path)
+		log.Printf("[Auth Middleware] Request headers: %+v", r.Header)
 
-		// Get token from Authorization header
+		// Extract token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			log.Printf("[Auth] Missing Authorization header in request from %s", r.RemoteAddr)
-			http.Error(w, `{"message":"Authorization header required"}`, http.StatusUnauthorized)
+			log.Printf("[Auth Middleware] No Authorization header found")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		// Remove "Bearer " prefix
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
-			log.Printf("[Auth] Invalid token format - missing Bearer prefix from %s", r.RemoteAddr)
-			http.Error(w, `{"message":"Invalid token format"}`, http.StatusUnauthorized)
+			log.Printf("[Auth Middleware] Invalid token format - missing 'Bearer' prefix")
+			http.Error(w, "Invalid token format", http.StatusUnauthorized)
 			return
 		}
 
@@ -64,75 +63,52 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			// Validate signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				log.Printf("[Auth Middleware] Invalid signing method: %v", token.Header["alg"])
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			return m.jwtSecret, nil
 		})
 
 		if err != nil {
-			log.Printf("[Auth] Token parsing error: %v from %s", err, r.RemoteAddr)
-			http.Error(w, `{"message":"Invalid token"}`, http.StatusUnauthorized)
+			log.Printf("[Auth Middleware] Token parsing error: %v", err)
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
-		// Extract and validate claims
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			// Validate token type
-			tokenType, ok := claims["type"].(string)
-			if !ok || tokenType != "access" {
-				log.Printf("[Auth] Invalid token type: %s from %s", tokenType, r.RemoteAddr)
-				http.Error(w, `{"message":"Invalid token type"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Explicit expiration check
-			if exp, ok := claims["exp"].(float64); !ok || time.Now().Unix() > int64(exp) {
-				log.Printf("[Auth] Token expired for request from %s", r.RemoteAddr)
-				http.Error(w, `{"message":"Token has expired"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Validate JTI claim and check blacklist
-			jti, ok := claims["jti"].(string)
-			if !ok || jti == "" {
-				log.Printf("[Auth] Missing or invalid JTI claim from %s", r.RemoteAddr)
-				http.Error(w, `{"message":"Invalid token ID"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Check if token is blacklisted
-			isBlacklisted, err := m.db.IsTokenBlacklisted(jti)
-			if err != nil {
-				log.Printf("[Auth] Error checking token blacklist: %v from %s", err, r.RemoteAddr)
-				http.Error(w, `{"message":"Error validating token"}`, http.StatusInternalServerError)
-				return
-			}
-			if isBlacklisted {
-				log.Printf("[Auth] Blacklisted token used from %s", r.RemoteAddr)
-				http.Error(w, `{"message":"Token has been revoked"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Store user ID in context
-			userID, ok := claims["sub"].(string)
-			if !ok || userID == "" {
-				log.Printf("[Auth] Invalid user ID in token from %s", r.RemoteAddr)
-				http.Error(w, `{"message":"Invalid user ID in token"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// Add user ID to context
-			ctx := context.WithValue(r.Context(), UserIDKey, userID)
-
-			// Log successful authentication
-			log.Printf("[Auth] Successfully authenticated user %s from %s", userID, r.RemoteAddr)
-
-			// Proceed with the request
-			next.ServeHTTP(w, r.WithContext(ctx))
-		} else {
-			log.Printf("[Auth] Invalid token claims from %s", r.RemoteAddr)
-			http.Error(w, `{"message":"Invalid token claims"}`, http.StatusUnauthorized)
+		// Validate token claims
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || !token.Valid {
+			log.Printf("[Auth Middleware] Invalid token claims")
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
 		}
+
+		// Check token type
+		tokenType, ok := claims["type"].(string)
+		if !ok || tokenType != "access" {
+			log.Printf("[Auth Middleware] Invalid token type: %v", tokenType)
+			http.Error(w, "Invalid token type", http.StatusUnauthorized)
+			return
+		}
+
+		// Check if token is blacklisted
+		if jti, ok := claims["jti"].(string); ok {
+			blacklisted, err := m.db.IsTokenBlacklisted(jti)
+			if err != nil {
+				log.Printf("[Auth Middleware] Error checking token blacklist: %v", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			if blacklisted {
+				log.Printf("[Auth Middleware] Token is blacklisted: %s", jti)
+				http.Error(w, "Token is invalid", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		// Token is valid, proceed with request
+		log.Printf("[Auth Middleware] Token validated successfully for user: %v", claims["sub"])
+		next.ServeHTTP(w, r)
 	})
 }
 
