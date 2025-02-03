@@ -1,32 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
-import { Input } from '@/components/Input'
-import { Button } from '@/components/Button'
-import { SocialButton } from '@/components/SocialButton'
-import { Navigation } from '@/components/Navigation'
 
-/**
- * Login page component that handles user authentication
- * Supports email/password and social login
- */
+import { toast } from 'sonner'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import Navigation  from '@/components/Navigation'
+import { SocialButton } from '@/components/ui/social-button'
+import { authService } from '@/services/auth'
+
 export default function Login() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-
-  const validatePassword = (password: string): string[] => {
-    const errors: string[] = [];
-    if (password.length < 8) errors.push('Password must be at least 8 characters long');
-    if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter');
-    if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter');
-    if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number');
-    if (!/[^A-Za-z0-9]/.test(password)) errors.push('Password must contain at least one special character');
-    return errors;
-  };
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -36,52 +24,35 @@ export default function Login() {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
-    const passwordErrors = validatePassword(password);
-    if (passwordErrors.length > 0) {
-      setIsLoading(false);
-      passwordErrors.forEach(error => toast.error(error));
-      return;
-    }
-
-    console.log('[Login] Attempting login with email:', email)
-
     try {
-      const result = await signIn('credentials', {
+      console.log('[Auth] Starting login process with email:', email);
+      // Login with credentials
+      const response = await authService.login({
         email,
         password,
-        redirect: false,
       })
+      console.log('[Auth] Login response received:', { id: response.id, expiresAt: response.expiresAt });
 
-      if (result?.error) {
-        console.error('[Login] Login failed:', result.error)
-        toast.error(result.error)
-        return
-      }
+      // Store the entire auth response in Zustand store
+      console.log('[Auth] Storing auth response in Zustand store');
 
-      console.log('[Login] Login successful, redirecting to dashboard')
+      // Set the auth header for future requests
+      console.log('[Auth] Setting auth header for future requests');
+      authService.setAuthHeader(response.token)
+
+      console.log('[Auth] Login successful, redirecting to dashboard');
       router.push('/dashboard')
       toast.success('Logged in successfully!')
     } catch (error: any) {
-      console.error('[Login] Unexpected error:', error)
-      toast.error('Something went wrong')
+      toast.error(error.response?.data?.message || 'Invalid email or password')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleGoogleSignIn = async () => {
-    console.log('[Login] Starting Google sign in')
-    try {
-      const result = await signIn('google', { callbackUrl: '/dashboard' })
-      if (result?.error) {
-        console.error('[Login] Google sign in failed:', result.error)
-        toast.error('Failed to sign in with Google')
-      }
-    } catch (error: any) {
-      console.error('[Login] Google sign in error:', error)
-      toast.error('Failed to sign in with Google')
-    }
-  }
+  const handleGoogleSignIn = async (credentialResponse: any) => {
+   // TODO:implement it 
+  };
 
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
@@ -151,6 +122,7 @@ export default function Login() {
               <div className="mt-6">
                 <SocialButton
                   provider="google"
+                  onClick={handleGoogleSignIn}
                   icon={
                     <svg className="h-5 w-5" aria-hidden="true" viewBox="0 0 24 24">
                       <path
@@ -171,7 +143,6 @@ export default function Login() {
                       />
                     </svg>
                   }
-                  onClick={handleGoogleSignIn}
                 >
                   Google
                 </SocialButton>
