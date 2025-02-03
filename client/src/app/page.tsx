@@ -1,6 +1,5 @@
 'use client'
 
-import { Navigation } from '@/components/Navigation'
 import { Footer } from '@/components/Footer'
 import { Hero } from '@/components/landing/Hero'
 import { Demo } from '@/components/landing/Demo'
@@ -16,7 +15,6 @@ import { CTA } from '@/components/landing/CTA'
 export default function Home() {
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
-      <Navigation />
       <Hero />
       <Demo />
       <Features />
