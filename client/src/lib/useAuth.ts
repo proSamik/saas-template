@@ -7,6 +7,7 @@ interface User {
   id: string
   name: string
   email: string
+  image?: string | null
 }
 
 interface AuthState {
@@ -18,12 +19,13 @@ interface AuthState {
 export function useAuth(): AuthState {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const { accessToken, setAccessToken, clearAuth } = useAuthStore()
+  const { accessToken, clearAuth, isTokenExpired } = useAuthStore()
   const router = useRouter()
 
   useEffect(() => {
     const checkAuth = async () => {
-      if (!accessToken) {
+      if (!accessToken || isTokenExpired()) {
+        clearAuth()
         setUser(null)
         setLoading(false)
         return
@@ -66,7 +68,7 @@ export function useAuth(): AuthState {
     checkAuth()
 
     // Set up periodic token verification
-    const interval = setInterval(checkAuth, 4 * 60 * 1000) // Check every 4 minutes
+    const interval = setInterval(checkAuth, 2 * 60 * 1000) // Check every 2 minutes to ensure we catch expiring tokens
 
     return () => clearInterval(interval)
   }, [accessToken, clearAuth, router])
