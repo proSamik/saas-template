@@ -41,16 +41,24 @@ func NewAuthMiddleware(db *database.DB, jwtSecret string) *AuthMiddleware {
 // If the token is valid, it adds the user ID to the request context
 func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set JSON content type for all responses
+		w.Header().Set("Content-Type", "application/json")
+
 		// Get token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			w.Header().Set("Content-Type", "application/json")
+			log.Printf("[Auth] Missing Authorization header in request from %s", r.RemoteAddr)
 			http.Error(w, `{"message":"Authorization header required"}`, http.StatusUnauthorized)
 			return
 		}
 
 		// Remove "Bearer " prefix
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			log.Printf("[Auth] Invalid token format - missing Bearer prefix from %s", r.RemoteAddr)
+			http.Error(w, `{"message":"Invalid token format"}`, http.StatusUnauthorized)
+			return
+		}
 
 		// Parse and validate token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -62,7 +70,7 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		})
 
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
+			log.Printf("[Auth] Token parsing error: %v from %s", err, r.RemoteAddr)
 			http.Error(w, `{"message":"Invalid token"}`, http.StatusUnauthorized)
 			return
 		}
@@ -72,14 +80,14 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			// Validate token type
 			tokenType, ok := claims["type"].(string)
 			if !ok || tokenType != "access" {
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[Auth] Invalid token type: %s from %s", tokenType, r.RemoteAddr)
 				http.Error(w, `{"message":"Invalid token type"}`, http.StatusUnauthorized)
 				return
 			}
 
 			// Explicit expiration check
 			if exp, ok := claims["exp"].(float64); !ok || time.Now().Unix() > int64(exp) {
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[Auth] Token expired for request from %s", r.RemoteAddr)
 				http.Error(w, `{"message":"Token has expired"}`, http.StatusUnauthorized)
 				return
 			}
@@ -87,7 +95,7 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			// Validate JTI claim and check blacklist
 			jti, ok := claims["jti"].(string)
 			if !ok || jti == "" {
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[Auth] Missing or invalid JTI claim from %s", r.RemoteAddr)
 				http.Error(w, `{"message":"Invalid token ID"}`, http.StatusUnauthorized)
 				return
 			}
@@ -95,13 +103,12 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			// Check if token is blacklisted
 			isBlacklisted, err := m.db.IsTokenBlacklisted(jti)
 			if err != nil {
-				log.Printf("Error checking token blacklist: %v", err)
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[Auth] Error checking token blacklist: %v from %s", err, r.RemoteAddr)
 				http.Error(w, `{"message":"Error validating token"}`, http.StatusInternalServerError)
 				return
 			}
 			if isBlacklisted {
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[Auth] Blacklisted token used from %s", r.RemoteAddr)
 				http.Error(w, `{"message":"Token has been revoked"}`, http.StatusUnauthorized)
 				return
 			}
@@ -109,16 +116,21 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			// Store user ID in context
 			userID, ok := claims["sub"].(string)
 			if !ok || userID == "" {
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[Auth] Invalid user ID in token from %s", r.RemoteAddr)
 				http.Error(w, `{"message":"Invalid user ID in token"}`, http.StatusUnauthorized)
 				return
 			}
 
+			// Add user ID to context
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
-			ctx = context.WithValue(ctx, UserIDContextKey, userID)
+
+			// Log successful authentication
+			log.Printf("[Auth] Successfully authenticated user %s from %s", userID, r.RemoteAddr)
+
+			// Proceed with the request
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
-			w.Header().Set("Content-Type", "application/json")
+			log.Printf("[Auth] Invalid token claims from %s", r.RemoteAddr)
 			http.Error(w, `{"message":"Invalid token claims"}`, http.StatusUnauthorized)
 		}
 	})
