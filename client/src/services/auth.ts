@@ -28,6 +28,10 @@ export interface GoogleAuthCredentials {
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // Required for cookies
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
 });
 
 // Track refresh attempts
@@ -118,7 +122,11 @@ export const authService = {
 
   async logout(): Promise<void> {
     console.log('[Auth] Sending logout request...');
-    await api.post('/auth/logout');
+    await api.post('/auth/logout', {}, {
+      headers: {
+        'Authorization': api.defaults.headers.common['Authorization']
+      }
+    });
     console.log('[Auth] Logout successful');
   },
 
@@ -148,14 +156,22 @@ export const authService = {
 
   async get<T = any>(url: string): Promise<T> {
     console.log(`[Auth] Sending GET request to ${url}`);
-    const response = await api.get<T>(url);
+    const response = await api.get<T>(url, {
+      headers: {
+        'Authorization': api.defaults.headers.common['Authorization']
+      }
+    });
     console.log(`[Auth] GET response received from ${url}`);
     return response.data;
   },
 
   async post(url: string, data: any) {
     console.log(`[Auth] Sending POST request to ${url}`);
-    const response = await api.post(url, data);
+    const response = await api.post(url, data, {
+      headers: {
+        'Authorization': api.defaults.headers.common['Authorization']
+      }
+    });
     console.log(`[Auth] POST response received from ${url}`);
     return response;
   },
