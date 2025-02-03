@@ -11,12 +11,12 @@ import { Input } from '@/components/ui/input'
 import Navigation from '@/components/Navigation'
 import { SocialButton } from '@/components/ui/social-button'
 import { authService } from '@/services/auth'
-import useAuthStore from '@/lib/store'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function SignUp() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const setAuth = useAuthStore(state => state.setAuth)
+  const { setAuth } = useAuth()
 
   const validatePassword = (password: string): string[] => {
     const errors: string[] = [];
@@ -53,24 +53,24 @@ export default function SignUp() {
       })
 
       // Login the user
-      const loginResponse = await authService.login({
+      const response = await authService.login({
         email,
         password
       })
       
-      // Store the entire auth response in Zustand store
+      // Store the auth response
       setAuth({
-        id: loginResponse.id,
-        token: loginResponse.token,
-        expiresAt: loginResponse.expiresAt,
-        name: loginResponse.name,
-        email: loginResponse.email
+        id: response.id,
+        token: response.token,
+        expiresAt: response.expiresAt,
+        name: response.name,
+        email: response.email
       })
 
       // Set the auth header for future requests
-      authService.setAuthHeader(loginResponse.token)
+      authService.setAuthHeader(response.token)
 
-      router.push('/dashboard')
+      router.push('/profile')
       toast.success('Account created successfully!')
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Something went wrong')
