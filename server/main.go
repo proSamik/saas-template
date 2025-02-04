@@ -74,17 +74,6 @@ func main() {
 	mux.Handle("/auth/reset-password", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.ResetPassword)))
 	mux.Handle("/auth/account-password/reset", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.AccountPasswordReset)))
 
-	// Account linking routes (protected)
-	mux.Handle("/auth/linked-accounts", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.GetLinkedAccounts)))
-	mux.Handle("/auth/link", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.LinkAccount)))
-	mux.Handle("/auth/link/", authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			authHandler.UnlinkAccount(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	})))
-
 	// User routes (protected)
 	mux.Handle("/user/profile", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
 	mux.Handle("/user/password", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdatePassword)))
