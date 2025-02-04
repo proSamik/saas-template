@@ -76,7 +76,6 @@ func main() {
 
 	// User routes (protected)
 	mux.Handle("/user/profile", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
-	mux.Handle("/user/password", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdatePassword)))
 
 	// Payment webhook routes - initialize handler once for better resource management
 	webhookHandler := &handlers.WebhookHandler{DB: db}
