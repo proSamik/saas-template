@@ -106,10 +106,8 @@ export const authService = {
     return response.data;
   },
 
-  async googleLogin(credentials: GoogleAuthCredentials): Promise<AuthResponse> {
-    console.log('[Auth] Sending Google login request...');
-    const response = await api.post('/auth/google', credentials);
-    console.log('[Auth] Google login response received');
+  async googleLogin(code: string): Promise<AuthResponse> {
+    const response = await axios.post(`${API_URL}/auth/google`, { code });
     return response.data;
   },
 
