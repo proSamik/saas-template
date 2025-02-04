@@ -42,7 +42,6 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Log request details
 		log.Printf("[Auth Middleware] Request received - Method: %s, Path: %s", r.Method, r.URL.Path)
-		log.Printf("[Auth Middleware] Request headers: %+v", r.Header)
 
 		// Extract token from Authorization header
 		authHeader := r.Header.Get("Authorization")
@@ -106,9 +105,20 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			}
 		}
 
-		// Token is valid, proceed with request
-		log.Printf("[Auth Middleware] Token validated successfully for user: %v", claims["sub"])
-		next.ServeHTTP(w, r)
+		// Token is valid, set user ID in context and proceed with request
+		userID, ok := claims["sub"].(string)
+		if !ok {
+			log.Printf("[Auth Middleware] Invalid user ID in token claims")
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		// Add user ID to context using both keys for compatibility
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
+		ctx = context.WithValue(ctx, UserIDContextKey, userID)
+
+		log.Printf("[Auth Middleware] Token validated successfully for user: %v", userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
