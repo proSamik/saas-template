@@ -120,7 +120,7 @@ const Navigation = () => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 z-50">
                 <Link
                   href="/auth/login"
                   className="text-light-foreground dark:text-dark-foreground hover:text-primary-500"
