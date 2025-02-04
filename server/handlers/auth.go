@@ -3,6 +3,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,22 +13,35 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	goauth "golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	googleauth "google.golang.org/api/oauth2/v2"
+	"google.golang.org/api/option"
+
 	"saas-server/database"
 	"saas-server/middleware"
 	"saas-server/models"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // AuthHandler handles authentication-related HTTP requests and manages user sessions
+// GoogleAuthRequest represents the request body for Google OAuth authentication
+type GoogleAuthRequest struct {
+	Code string `json:"code"` // Authorization code from Google OAuth
+}
+
 type AuthHandler struct {
-	db               database.DBInterface
-	jwtSecret        []byte
-	jwtRefreshSecret []byte
-	authLimiter      *middleware.RateLimiter
+	db                 database.DBInterface
+	jwtSecret          []byte
+	jwtRefreshSecret   []byte
+	authLimiter        *middleware.RateLimiter
+	googleClientID     string
+	googleClientSecret string
+	googleRedirectURL  string
 }
 
 // RegisterRequest represents the request body for user registration endpoint
@@ -45,15 +59,11 @@ type LoginRequest struct {
 
 // AuthResponse represents the response body for successful authentication operations
 type AuthResponse struct {
-	ID        string `json:"id"`        // User's unique identifier
-	Token     string `json:"token"`     // JWT access token
-	ExpiresAt int64  `json:"expiresAt"` // Access token expiration timestamp
-	Name      string `json:"name"`      // User's display name
-	Email     string `json:"email"`     // User's email address
-}
-
-// GoogleAuthRequest represents the request body for Google OAuth authentication
-type GoogleAuthRequest struct {
+	ID          string `json:"id"`           // User's unique identifier
+	Token       string `json:"token"`        // JWT access token
+	ExpiresAt   int64  `json:"expiresAt"`    // Access token expiration timestamp
+	Name        string `json:"name"`         // User's display name
+	Email       string `json:"email"`        // User's email address
 	AccessToken string `json:"access_token"` // Google OAuth access token
 	IDToken     string `json:"id_token"`     // Google OAuth ID token
 	User        struct {
@@ -108,90 +118,101 @@ func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
 	authLimiter := middleware.NewRateLimiter(time.Minute, 5)
 
 	return &AuthHandler{
-		db:               db,
-		jwtSecret:        []byte(jwtSecret),
-		jwtRefreshSecret: []byte(jwtSecret), // Using same secret for now, could be different in production
-		authLimiter:      authLimiter,
+		db:                 db,
+		jwtSecret:          []byte(jwtSecret),
+		jwtRefreshSecret:   []byte(jwtSecret), // Using same secret for now, could be different in production
+		authLimiter:        authLimiter,
+		googleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		googleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		googleRedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
 	}
 }
 
-// Register handles user registration endpoint (POST /auth/register)
-// It validates the request, checks for existing users, and creates a new user account
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[Auth] Starting registration process")
-
-	var req RegisterRequest
+func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
+	var req GoogleAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[Auth] Invalid request body: %v", err)
+		log.Printf("[Auth] Error decoding request body: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Validate email format
-	if !regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`).MatchString(req.Email) {
-		log.Printf("[Auth] Invalid email format: %s", req.Email)
-		http.Error(w, "Invalid email format", http.StatusBadRequest)
-		return
+	// Initialize OAuth2 config
+	config := &goauth.Config{
+		ClientID:     h.googleClientID,
+		ClientSecret: h.googleClientSecret,
+		RedirectURL:  h.googleRedirectURL, // This matches the redirect URI in Google Console
+		Scopes: []string{
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		Endpoint: google.Endpoint,
 	}
-
-	// Validate password strength
-	if err := validatePassword(req.Password); err != nil {
-		log.Printf("[Auth] Invalid password: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	log.Printf("[Auth] Checking if user exists: %s", req.Email)
-	exists, err := h.db.UserExists(req.Email)
+	// Exchange authorization code for token
+	token, err := config.Exchange(context.Background(), req.Code)
+	log.Printf("[Auth] Exchanging code with redirect URI: %s, received code: %s", config.RedirectURL, req.Code)
 	if err != nil {
-		log.Printf("[Auth] Error checking user existence: %v", err)
-		http.Error(w, "Error checking user existence", http.StatusInternalServerError)
-		return
-	}
-	if exists {
-		log.Printf("[Auth] User already exists: %s", req.Email)
-		http.Error(w, "User already exists", http.StatusConflict)
+		log.Printf("[Auth] Failed to exchange auth code: %v", err)
+		http.Error(w, "Failed to authenticate with Google", http.StatusUnauthorized)
 		return
 	}
 
-	log.Printf("[Auth] Hashing password for user: %s", req.Email)
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	// Get user info using oauth2 service
+	oauth2Service, err := googleauth.NewService(context.Background(), option.WithTokenSource(config.TokenSource(context.Background(), token)))
 	if err != nil {
-		log.Printf("[Auth] Error hashing password: %v", err)
-		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		log.Printf("[Auth] Failed to create OAuth2 service: %v", err)
+		http.Error(w, "Failed to verify Google credentials", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[Auth] Creating user: %s", req.Email)
-	user, err := h.db.CreateUser(req.Email, string(hashedPassword), req.Name)
+	userInfo, err := oauth2Service.Userinfo.Get().Do()
 	if err != nil {
-		log.Printf("[Auth] Error creating user: %v", err)
-		http.Error(w, "Error creating user", http.StatusInternalServerError)
+		log.Printf("[Auth] Failed to get user info: %v", err)
+		http.Error(w, "Failed to get user information", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[Auth] Generating JWT for user: %s", user.ID)
+	// Verify the user exists or create a new one
+	user, err := h.db.GetUserByEmail(userInfo.Email)
+	if err != nil {
+		if err == database.ErrNotFound || err.Error() == "sql: no rows in result set" {
+			// Create new user with Google provider and verified email
+			user, err = h.db.CreateUser(userInfo.Email, "", userInfo.Name)
+			if err != nil {
+				log.Printf("[Auth] Failed to create user: %v", err)
+				http.Error(w, "Failed to create user", http.StatusInternalServerError)
+				return
+			}
+
+			// Update additional user fields
+			if err := h.db.UpdateUserFields(user.ID, true, "google"); err != nil {
+				log.Printf("[Auth] Failed to update user fields: %v", err)
+			}
+		} else {
+			log.Printf("[Auth] Database error while checking user: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Generate JWT token
 	accessExp := time.Now().Add(15 * time.Minute)
-
-	// Generate JTI (JWT ID) for token tracking
 	jti := uuid.New().String()
 
-	// Create access token with minimal claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":  user.ID,
 		"exp":  accessExp.Unix(),
 		"jti":  jti,
 		"type": "access",
 	})
 
-	tokenString, err := token.SignedString(h.jwtSecret)
+	tokenString, err := jwtToken.SignedString(h.jwtSecret)
 	if err != nil {
 		log.Printf("[Auth] Error generating token: %v", err)
 		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
 	}
 
-	// Generate refresh token with JWT claims
+	// Generate refresh token
 	refreshExp := time.Now().Add(7 * 24 * time.Hour)
 	refreshJti := uuid.New().String()
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -208,21 +229,20 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get device info and IP address
+	// Store refresh token with device info
 	userAgent := r.Header.Get("User-Agent")
 	ipAddress := r.Header.Get("X-Forwarded-For")
 	if ipAddress == "" {
 		ipAddress = r.RemoteAddr
 	}
 
-	// Store refresh token in database with device info
 	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
 		log.Printf("[Auth] Error storing refresh token: %v", err)
 		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
 		return
 	}
 
-	// Set refresh token in HTTP-only cookie
+	// Set secure cookies
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshTokenString,
@@ -233,7 +253,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Expires:  refreshExp,
 	})
 
-	// Set CSRF token cookie (not HTTP-only so JS can read it)
 	csrfToken := uuid.New().String()
 	http.SetCookie(w, &http.Cookie{
 		Name:     "csrf_token",
@@ -242,10 +261,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: false,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		Expires:  refreshExp,
 	})
 
-	log.Printf("[Auth] Registration successful for user: %s", user.ID)
+	// Send response
 	response := AuthResponse{
 		ID:        user.ID,
 		Token:     tokenString,
@@ -253,9 +272,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Name:      user.Name,
 		Email:     user.Email,
 	}
-	log.Printf("[Auth] Registration response: %+v", response)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// Register handles user registration endpoint (POST /auth/register)
+// It validates the request, checks for existing users, and creates a new user account
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login handles user authentication endpoint (POST /auth/login)
@@ -372,142 +396,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[Auth] Login response: %+v", response)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// GoogleAuth handles Google OAuth authentication endpoint (POST /auth/google)
-// It processes Google OAuth tokens and creates or updates user accounts
-func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
-	var req GoogleAuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[Auth] Error decoding request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Enhanced logging for debugging
-	log.Printf("[Auth] Received Google auth request for email: %s", req.User.Email)
-
-	// Validate required fields with detailed error messages
-	if req.AccessToken == "" || req.IDToken == "" {
-		log.Printf("[Auth] Missing tokens - Access Token: %v, ID Token: %v", req.AccessToken != "", req.IDToken != "")
-		http.Error(w, "Both access_token and id_token are required", http.StatusBadRequest)
-		return
-	}
-
-	if req.User.Email == "" || req.User.Name == "" {
-		log.Printf("[Auth] Missing user info - Email: %v, Name: %v", req.User.Email != "", req.User.Name != "")
-		http.Error(w, "Missing user information", http.StatusBadRequest)
-		return
-	}
-
-	// Verify the user exists or create a new one with error handling
-	user, err := h.db.GetUserByEmail(req.User.Email)
-	if err != nil {
-		if err == database.ErrNotFound || err.Error() == "sql: no rows in result set" {
-			log.Printf("[Auth] Creating new user for email: %s", req.User.Email)
-			// Create new user with Google provider and verified email
-			user, err = h.db.CreateUser(req.User.Email, "", req.User.Name)
-			if err != nil {
-				log.Printf("[Auth] Failed to create user: %v", err)
-				http.Error(w, "Failed to create user", http.StatusInternalServerError)
-				return
-			}
-
-			// Update additional user fields
-			if err := h.db.UpdateUserFields(user.ID, true, "google"); err != nil {
-				log.Printf("[Auth] Failed to update user fields: %v", err)
-				// Don't return error here as the user is already created
-			}
-		} else {
-			log.Printf("[Auth] Database error while checking user: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Generate JWT token
-	accessExp := time.Now().Add(15 * time.Minute)
-	jti := uuid.New().String()
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"exp":  accessExp.Unix(),
-		"jti":  jti,
-		"type": "access",
-	})
-
-	tokenString, err := token.SignedString(h.jwtSecret)
-	if err != nil {
-		log.Printf("[Auth] Error generating token: %v", err)
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
-		return
-	}
-
-	// Generate refresh token with JWT claims
-	refreshExp := time.Now().Add(7 * 24 * time.Hour)
-	refreshJti := uuid.New().String()
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"exp":  refreshExp.Unix(),
-		"jti":  refreshJti,
-		"type": "refresh",
-	})
-
-	refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
-	if err != nil {
-		log.Printf("[Auth] Error generating refresh token: %v", err)
-		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Get device info and IP address
-	userAgent := r.Header.Get("User-Agent")
-	ipAddress := r.Header.Get("X-Forwarded-For")
-	if ipAddress == "" {
-		ipAddress = r.RemoteAddr
-	}
-
-	// Store refresh token in database with device info
-	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
-		log.Printf("[Auth] Error storing refresh token: %v", err)
-		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Set refresh token in HTTP-only cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshTokenString,
-		Path:     "/api/auth",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	// Generate CSRF token
-	csrfToken := uuid.New().String()
-	http.SetCookie(w, &http.Cookie{
-		Name:     "csrf_token",
-		Value:    csrfToken,
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
-	response := AuthResponse{
-		ID:        user.ID,
-		Token:     tokenString,
-		ExpiresAt: accessExp.Unix(),
-		Name:      user.Name,
-		Email:     user.Email,
-	}
-	log.Printf("[Auth] Google auth response: %+v", response)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
