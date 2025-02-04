@@ -85,6 +85,12 @@ type UpdatePasswordRequest struct {
 	NewPassword     string `json:"newPassword"`     // User's new password
 }
 
+// AccountPasswordResetRequest represents the request body for account password reset endpoint
+type AccountPasswordResetRequest struct {
+	CurrentPassword string `json:"currentPassword"` // User's current password
+	NewPassword     string `json:"newPassword"`     // User's new password
+}
+
 // LinkAccountRequest represents the request for linking a new account
 type LinkAccountRequest struct {
 	Provider string `json:"provider"`
@@ -638,26 +644,6 @@ func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
 	return token, nil
 }
 
-// validatePassword checks if a password meets security requirements
-func validatePassword(password string) error {
-	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters long")
-	}
-	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one uppercase letter")
-	}
-	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one lowercase letter")
-	}
-	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one number")
-	}
-	if !regexp.MustCompile(`[^A-Za-z0-9]`).MatchString(password) {
-		return fmt.Errorf("password must contain at least one special character")
-	}
-	return nil
-}
-
 // UpdateProfile handles user profile update endpoint (PUT /user/profile)
 // It requires authentication and updates the user's profile information
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -929,28 +915,16 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse and validate reset token
-	token, err := jwt.Parse(req.Token, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return h.jwtSecret, nil
-	})
-
-	if err != nil || !token.Valid {
+	// Get user ID from reset token
+	userID, err := h.db.GetPasswordResetToken(req.Token)
+	if err != nil {
 		http.Error(w, "Invalid or expired reset token", http.StatusBadRequest)
 		return
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		http.Error(w, "Invalid token claims", http.StatusBadRequest)
-		return
-	}
-
-	userID, ok := claims["sub"].(string)
-	if !ok {
-		http.Error(w, "Invalid user ID in token", http.StatusBadRequest)
+	// Mark token as used
+	if err := h.db.MarkPasswordResetTokenUsed(req.Token); err != nil {
+		http.Error(w, "Token has already been used", http.StatusBadRequest)
 		return
 	}
 
@@ -977,4 +951,96 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Password updated successfully. Please log in again with your new password.",
 	})
+}
+
+// AccountPasswordReset handles password reset for authenticated users
+func (h *AuthHandler) AccountPasswordReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		log.Printf("[Auth] Method not allowed: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		log.Printf("[Auth] Unauthorized request to reset password")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req AccountPasswordResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Auth] Invalid request body for password reset: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate new password strength
+	if err := validatePassword(req.NewPassword); err != nil {
+		log.Printf("[Auth] Invalid new password: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get user from database
+	user, err := h.db.GetUserByID(userID)
+	if err != nil {
+		log.Printf("[Auth] User not found: %v", err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)); err != nil {
+		log.Printf("[Auth] Current password is incorrect for user: %s", userID)
+		http.Error(w, "Current password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("[Auth] Failed to hash password: %v", err)
+		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		return
+	}
+
+	// Update password in database
+	if err := h.db.UpdatePassword(userID, string(hashedPassword)); err != nil {
+		log.Printf("[Auth] Failed to update password: %v", err)
+		http.Error(w, "Error updating password", http.StatusInternalServerError)
+		return
+	}
+
+	// Invalidate all refresh tokens for this user
+	if err := h.db.DeleteAllUserRefreshTokens(userID); err != nil {
+		log.Printf("[Auth] Error invalidating refresh tokens: %v", err)
+		// Don't return error here as the password is already updated
+	}
+
+	log.Printf("[Auth] Password reset successful for user: %s", userID)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Password updated successfully.",
+	})
+}
+
+// validatePassword checks if a password meets security requirements
+func validatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one number")
+	}
+	if !regexp.MustCompile(`[^A-Za-z0-9]`).MatchString(password) {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+	return nil
 }
