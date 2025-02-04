@@ -32,7 +32,7 @@ const Navigation = () => {
   const isActive = (path: string) => pathname === path
 
   return (
-    <nav className="bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent">
+    <nav className="bg-light-background dark:bg-dark-background border-b border-light-accent dark:border-dark-accent ">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 justify-between">
           {/* Logo and main navigation */}
@@ -59,7 +59,7 @@ const Navigation = () => {
           </div>
 
           {/* Mobile menu button */}
-          <div className="flex items-center sm:hidden">
+          <div className="flex items-center sm:hidden z-50">
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-md p-2 text-light-muted dark:text-dark-muted hover:bg-light-accent dark:hover:bg-dark-accent"
@@ -141,7 +141,7 @@ const Navigation = () => {
         {/* Mobile menu */}
         {isMenuOpen && (
           <div className="sm:hidden">
-            <div className="space-y-1 pb-3 pt-2">
+            <div className="space-y-1 pb-3 pt-2 z-50">
               {navigation.map((item) => (
                 <Link
                   key={item.name}
@@ -156,7 +156,7 @@ const Navigation = () => {
               ))}
             </div>
             {!auth && (
-              <div className="border-t border-light-accent dark:border-dark-accent pb-3 pt-4">
+              <div className="border-t border-light-accent dark:border-dark-accent pb-3 pt-4 z-50">
                 <div className="space-y-1">
                   <Link
                     href="/auth/login"
@@ -175,29 +175,29 @@ const Navigation = () => {
             )}
             {auth && (
               <div className="border-t border-light-accent dark:border-dark-accent pb-3 pt-4">
-                <div className="flex items-center px-4">
-                  <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white">
+                <div className="flex items-center px-4 z-50">
+                  <div className="h-8 w-8 rounded-full bg-primary-500 flex items-center justify-center text-white z-50">
                     {auth.name?.[0]?.toUpperCase() || auth.email[0].toUpperCase()}
                   </div>
                   <div className="ml-3">
-                    <div className="text-base font-medium text-light-foreground dark:text-dark-foreground">
+                    <div className="text-base font-medium text-light-foreground dark:text-dark-foreground z-50">
                       {auth.name || 'User'}
                     </div>
-                    <div className="text-sm font-medium text-light-muted dark:text-dark-muted">
+                    <div className="text-sm font-medium text-light-muted dark:text-dark-muted z-50">
                       {auth.email}
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 space-y-1">
+                <div className="mt-3 space-y-1 z-50">
                   <Link
                     href="/profile"
-                    className="block px-4 py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:bg-light-accent dark:hover:bg-dark-accent"
+                    className="block px-4 py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:bg-light-accent dark:hover:bg-dark-accent z-50"
                   >
                     Your Profile
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:bg-light-accent dark:hover:bg-dark-accent"
+                    className="block w-full text-left px-4 py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:bg-light-accent dark:hover:bg-dark-accent z-50"
                   >
                     Sign out
                   </button>
