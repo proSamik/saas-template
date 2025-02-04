@@ -97,7 +97,7 @@ type RequestPasswordResetRequest struct {
 // ResetPasswordRequest represents the request body for password reset
 type ResetPasswordRequest struct {
 	Token       string `json:"token"`       // Password reset token
-	NewPassword string `json:"newPassword"` // New password to set
+	NewPassword string `json:"password"` 	// New password to set
 }
 
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
