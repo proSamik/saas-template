@@ -46,7 +46,7 @@ const Navigation = () => {
   }, [])
 
   return (
-    <div className="fixed top-0 left-0 right-0  z-50 flex justify-center w-full mx-auto">
+    <div className="fixed top-0 left-0 right-0 z-50 flex justify-center w-full mx-auto bg-light-background/80 dark:bg-dark-background/80 backdrop-blur supports-[backdrop-filter]:bg-light-background/60 supports-[backdrop-filter]:dark:bg-dark-background/80">
       <nav className="flex w-full max-w-7xl px-4 sm:px-6 lg:px-8 ">
         <div className="flex justify-between items-center w-full h-16">
           {/* Logo and Navigation Links */}
