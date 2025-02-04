@@ -22,9 +22,7 @@ import (
 
 	"saas-server/database"
 	"saas-server/middleware"
-	"saas-server/models"
 
-	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -89,22 +87,6 @@ type UpdatePasswordRequest struct {
 type AccountPasswordResetRequest struct {
 	CurrentPassword string `json:"currentPassword"` // User's current password
 	NewPassword     string `json:"newPassword"`     // User's new password
-}
-
-// LinkAccountRequest represents the request for linking a new account
-type LinkAccountRequest struct {
-	Provider string `json:"provider"`
-	Token    string `json:"token"`
-	User     struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
-		Image string `json:"image"`
-	} `json:"user"`
-}
-
-// LinkedAccountsResponse represents the response for getting linked accounts
-type LinkedAccountsResponse struct {
-	Accounts []models.LinkedAccountResponse `json:"accounts"`
 }
 
 // RequestPasswordResetRequest represents the request body for password reset request
@@ -602,48 +584,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// validateToken validates a JWT token and returns the parsed token if valid
-func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Validate signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return h.jwtSecret, nil
-	})
-
-	if err != nil {
-		log.Printf("[Auth] Token validation error: %v", err)
-		return nil, err
-	}
-
-	// Check if token is valid and has required claims
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		// Extract token ID and user ID
-		jti, ok1 := claims["jti"].(string)
-		_, ok2 := claims["sub"].(string)
-
-		if !ok1 || !ok2 {
-			log.Printf("[Auth] Token missing required claims")
-			return nil, fmt.Errorf("token missing required claims")
-		}
-
-		// Check if token is blacklisted
-		blacklisted, err := h.db.IsTokenBlacklisted(jti)
-		if err != nil {
-			log.Printf("[Auth] Error checking token blacklist: %v", err)
-			return nil, fmt.Errorf("error checking token blacklist")
-		}
-
-		if blacklisted {
-			log.Printf("[Auth] Token is blacklisted: %s", jti)
-			return nil, fmt.Errorf("token is blacklisted")
-		}
-	}
-
-	return token, nil
-}
-
 // UpdateProfile handles user profile update endpoint (PUT /user/profile)
 // It requires authentication and updates the user's profile information
 func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -761,92 +701,6 @@ func (h *AuthHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Password updated successfully. Please log in again with your new password.",
 	})
-}
-
-// GetLinkedAccounts handles retrieving all linked accounts for a user (GET /auth/linked-accounts)
-func (h *AuthHandler) GetLinkedAccounts(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
-
-	accounts, err := h.db.GetLinkedAccounts(userID)
-	if err != nil {
-		log.Printf("[Auth] Error getting linked accounts: %v", err)
-		http.Error(w, "Error getting linked accounts", http.StatusInternalServerError)
-		return
-	}
-
-	// Convert to response type
-	response := LinkedAccountsResponse{
-		Accounts: make([]models.LinkedAccountResponse, len(accounts)),
-	}
-	for i, account := range accounts {
-		response.Accounts[i] = models.LinkedAccountResponse{
-			ID:       account.ID,
-			Provider: account.Provider,
-			Email:    account.Email,
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
-}
-
-// LinkAccount handles linking a new authentication method to an existing account (POST /auth/link)
-func (h *AuthHandler) LinkAccount(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
-
-	var req LinkAccountRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[Auth] Invalid request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Check if this provider/email is already linked to another account
-	existing, err := h.db.GetLinkedAccountByProviderEmail(req.Provider, req.User.Email)
-	if err != nil && err != database.ErrNotFound {
-		log.Printf("[Auth] Error checking existing linked account: %v", err)
-		http.Error(w, "Error checking existing linked account", http.StatusInternalServerError)
-		return
-	}
-	if existing != nil {
-		log.Printf("[Auth] Account already linked to another user: %s", req.User.Email)
-		http.Error(w, "Account already linked to another user", http.StatusConflict)
-		return
-	}
-
-	// Create the linked account
-	account, err := h.db.CreateLinkedAccount(userID, req.Provider, req.User.Email)
-	if err != nil {
-		log.Printf("[Auth] Error creating linked account: %v", err)
-		http.Error(w, "Error creating linked account", http.StatusInternalServerError)
-		return
-	}
-
-	// Return the new linked account
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(models.LinkedAccountResponse{
-		ID:       account.ID,
-		Provider: account.Provider,
-		Email:    account.Email,
-	})
-}
-
-// UnlinkAccount handles removing a linked authentication method (DELETE /auth/link/{id})
-func (h *AuthHandler) UnlinkAccount(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(string)
-	accountID := chi.URLParam(r, "id")
-
-	if err := h.db.DeleteLinkedAccount(accountID, userID); err != nil {
-		if err == database.ErrNotFound {
-			http.Error(w, "Linked account not found", http.StatusNotFound)
-			return
-		}
-		log.Printf("[Auth] Error deleting linked account: %v", err)
-		http.Error(w, "Error deleting linked account", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // RequestPasswordReset handles password reset request endpoint (POST /auth/reset-password/request)
@@ -1023,6 +877,48 @@ func (h *AuthHandler) AccountPasswordReset(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Password updated successfully.",
 	})
+}
+
+// validateToken validates a JWT token and returns the parsed token if valid
+func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return h.jwtSecret, nil
+	})
+
+	if err != nil {
+		log.Printf("[Auth] Token validation error: %v", err)
+		return nil, err
+	}
+
+	// Check if token is valid and has required claims
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// Extract token ID and user ID
+		jti, ok1 := claims["jti"].(string)
+		_, ok2 := claims["sub"].(string)
+
+		if !ok1 || !ok2 {
+			log.Printf("[Auth] Token missing required claims")
+			return nil, fmt.Errorf("token missing required claims")
+		}
+
+		// Check if token is blacklisted
+		blacklisted, err := h.db.IsTokenBlacklisted(jti)
+		if err != nil {
+			log.Printf("[Auth] Error checking token blacklist: %v", err)
+			return nil, fmt.Errorf("error checking token blacklist")
+		}
+
+		if blacklisted {
+			log.Printf("[Auth] Token is blacklisted: %s", jti)
+			return nil, fmt.Errorf("token is blacklisted")
+		}
+	}
+
+	return token, nil
 }
 
 // validatePassword checks if a password meets security requirements
