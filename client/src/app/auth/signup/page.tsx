@@ -8,7 +8,6 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import Navigation from '@/components/Navigation'
 import { SocialButton } from '@/components/ui/social-button'
 import { authService } from '@/services/auth'
 import { useAuth } from '@/contexts/AuthContext'
@@ -80,14 +79,51 @@ export default function SignUp() {
   }
 
   const handleGoogleSignIn = async () => {
-    // TODO: Implement Google OAuth flow
-    toast.error('Google sign-in is not yet implemented')
-  }
+    setIsLoading(true);
+    try {
+      // Initialize Google OAuth client
+      const client = window.google.accounts.oauth2.initCodeClient({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+        scope: 'email profile',
+        ux_mode: 'redirect',
+        redirect_uri: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'http://localhost:3000/callback/google',
+        callback: async (response: { code: string }) => {
+          if (response.code) {
+            try {
+              // Send the code to our backend
+              const authResponse = await authService.googleLogin(response.code);
+              
+              // Update auth state with the response
+              setAuth({
+                id: authResponse.id,
+                token: authResponse.token,
+                expiresAt: authResponse.expiresAt,
+                name: authResponse.name,
+                email: authResponse.email
+              });
+
+              // Set the auth header for future requests
+              authService.setAuthHeader(authResponse.token);
+              router.push('/profile');
+              toast.success('Logged in with Google successfully!');
+            } catch (error: any) {
+              toast.error(error.response?.data?.message || 'Failed to authenticate with Google');
+            }
+          }
+          setIsLoading(false);
+        }
+      });
+
+      // Request authorization code
+      client.requestCode();
+    } catch (error: any) {
+      setIsLoading(false);
+      toast.error('Failed to initialize Google Sign-In');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
-      <Navigation />
-      
       <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
