@@ -130,20 +130,34 @@ export const authService = {
 
   async refreshToken(): Promise<AuthResponse> {
     console.log('[Auth] Sending refresh token request...');
-    const response = await api.post('/auth/refresh');
+    const response = await api.post('/auth/refresh', {}, {
+      headers: {
+        'Authorization': api.defaults.headers.common['Authorization']
+      }
+    });
     console.log('[Auth] Refresh token response received');
     return response.data;
   },
 
   async forgotPassword(email: string): Promise<void> {
     console.log('[Auth] Sending forgot password request...');
-    await api.post('/auth/forgot-password', { email });
+    await api.post('/auth/reset-password/request', { email });
     console.log('[Auth] Forgot password request successful');
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
     console.log('[Auth] Sending reset password request...');
     await api.post('/auth/reset-password', { token, password });
+    console.log('[Auth] Password reset successful');
+  },
+
+  async AccountPasswordReset(currentPassword: string, newPassword: string): Promise<void> {
+    console.log('[Auth] Sending reset password request...');
+    await api.post('/auth/account-password/reset', { currentPassword, newPassword }, {
+      headers: {
+        'Authorization': api.defaults.headers.common['Authorization']
+      }
+    });
     console.log('[Auth] Password reset successful');
   },
 
