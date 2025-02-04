@@ -36,7 +36,7 @@ const api = axios.create({
 
 // Track refresh attempts
 let refreshAttempts = 0;
-const MAX_REFRESH_ATTEMPTS = 10;
+const MAX_REFRESH_ATTEMPTS = 5;
 
 // Intercept responses to handle token refresh
 api.interceptors.response.use(
