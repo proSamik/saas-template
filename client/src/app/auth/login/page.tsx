@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SocialButton } from '@/components/ui/social-button'
-import { authService } from '@/services/auth'
+import { authService, GoogleAuthCredentials } from '@/services/auth'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function Login() {
@@ -57,8 +57,48 @@ export default function Login() {
     }
   }
 
-  const handleGoogleSignIn = async (credentialResponse: any) => {
-   // TODO:implement it 
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      // Initialize Google OAuth client with popup mode
+      const client = window.google.accounts.oauth2.initCodeClient({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+        scope: 'email profile',
+        ux_mode: 'redirect',
+        redirect_uri: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'http://localhost:3000/callback/google',
+        callback: async (response: { code: string }) => {
+          if (response.code) {
+            try {
+              // Send the code to our backend
+              const authResponse = await authService.googleLogin(response.code);
+              
+              // Update auth state with the response
+              setAuth({
+                id: authResponse.id,
+                token: authResponse.token,
+                expiresAt: authResponse.expiresAt,
+                name: authResponse.name,
+                email: authResponse.email
+              });
+
+              // Set the auth header for future requests
+              authService.setAuthHeader(authResponse.token);
+              router.push('/profile');
+              toast.success('Logged in with Google successfully!');
+            } catch (error: any) {
+              toast.error(error.response?.data?.message || 'Failed to authenticate with Google');
+            }
+          }
+          setIsLoading(false);
+        }
+      });
+
+      // Request authorization code
+      client.requestCode();
+    } catch (error: any) {
+      setIsLoading(false);
+      toast.error('Failed to initialize Google Sign-In');
+    }
   };
 
   return (
@@ -158,4 +198,24 @@ export default function Login() {
       </div>
     </div>
   )
+}
+
+declare global {
+  interface Window {
+    google: {
+      accounts: {
+        oauth2: {
+          initCodeClient(config: {
+            client_id: string;
+            scope: string;
+            ux_mode: string;
+            redirect_uri: string;
+            callback: (response: { code: string }) => void;
+          }): {
+            requestCode(): void;
+          };
+        };
+      };
+    };
+  }
 }
