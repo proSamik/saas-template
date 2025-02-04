@@ -12,7 +12,6 @@ require (
 )
 
 require (
-	github.com/go-chi/chi/v5 v5.2.0
 	github.com/stretchr/testify v1.10.0
 )
 
