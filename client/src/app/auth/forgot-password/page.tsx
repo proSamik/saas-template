@@ -73,6 +73,7 @@ export default function ForgotPassword() {
                 type="email"
                 label="Email address"
                 autoComplete="email"
+                placeholder="Enter your email address"
                 required
               />
 
