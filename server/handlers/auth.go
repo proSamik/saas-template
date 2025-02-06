@@ -169,7 +169,7 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate JWT token
-	accessExp := time.Now().Add(15 * time.Minute)
+	accessExp := time.Now().Add(5 * time.Minute)
 	jti := uuid.New().String()
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -352,7 +352,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate tokens with enhanced security
-	accessExp := time.Now().Add(15 * time.Minute)
+	accessExp := time.Now().Add(5 * time.Minute)
 
 	// Generate JTI (JWT ID) for token tracking
 	jti := uuid.New().String()
