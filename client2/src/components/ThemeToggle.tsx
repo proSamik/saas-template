@@ -1,32 +1,25 @@
 'use client'
 
-import * as React from 'react'
-import { Moon, Sun } from 'lucide-react'
-import { useTheme } from 'next-themes'
-import { Button } from './ui/button'
+import { MoonIcon, SunIcon } from '@heroicons/react/24/outline'
+import { useTheme } from './ThemeProvider'
 
-type Theme = 'light' | 'dark'
-
+/**
+ * ThemeToggle component that provides a button to switch between light and dark themes
+ */
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
-  const isLight = theme === 'light'
+  const { theme, toggleTheme } = useTheme()
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(isLight ? 'dark' : 'light')}
-      aria-label={`Switch to ${isLight ? 'dark' : 'light'} theme`}
-      aria-pressed={!isLight}
+    <button
+      onClick={toggleTheme}
+      className="rounded-md p-2 hover:bg-light-accent dark:hover:bg-dark-accent transition-colors focus:outline-none"
+      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
     >
-      <Sun 
-        className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-transform duration-200 ease-in-out dark:-rotate-90 dark:scale-0" 
-        aria-hidden="true"
-      />
-      <Moon 
-        className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-transform duration-200 ease-in-out dark:rotate-0 dark:scale-100" 
-        aria-hidden="true"
-      />
-    </Button>
+      {theme === 'light' ? (
+        <MoonIcon className="h-5 w-5 text-light-muted hover:text-primary-600" />
+      ) : (
+        <SunIcon className="h-5 w-5 text-dark-muted hover:text-primary-600" />
+      )}
+    </button>
   )
-}
+} 
