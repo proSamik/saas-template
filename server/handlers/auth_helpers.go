@@ -103,7 +103,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Generate new tokens with enhanced security
-		accessExp := time.Now().Add(15 * time.Minute)
+		accessExp := time.Now().Add(5 * time.Minute)
 
 		// Generate JTI for token tracking
 		jti := uuid.New().String()
