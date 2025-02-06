@@ -82,8 +82,8 @@ type RequestPasswordResetRequest struct {
 
 // ResetPasswordRequest represents the request body for password reset
 type ResetPasswordRequest struct {
-	Token       string `json:"token"`       // Password reset token
-	NewPassword string `json:"password"` 	// New password to set
+	Token       string `json:"token"`    // Password reset token
+	NewPassword string `json:"password"` // New password to set
 }
 
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
@@ -254,6 +254,71 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 // Register handles user registration endpoint (POST /auth/register)
 // It validates the request, checks for existing users, and creates a new user account
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Email == "" {
+		http.Error(w, "Email is required", http.StatusBadRequest)
+		return
+	}
+	if req.Password == "" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate password strength
+	if err := validatePassword(req.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists
+	existingUser, err := h.db.GetUserByEmail(req.Email)
+	if err == nil && existingUser != nil {
+		http.Error(w, "Email already registered", http.StatusConflict)
+		return
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("[Auth] Error hashing password: %v", err)
+		http.Error(w, "Error processing registration", http.StatusInternalServerError)
+		return
+	}
+
+	// Create new user
+	user, err := h.db.CreateUser(req.Email, string(hashedPassword), req.Name)
+	if err != nil {
+		log.Printf("[Auth] Error creating user: %v", err)
+		http.Error(w, "Error creating user", http.StatusInternalServerError)
+		return
+	}
+
+	// Update additional user fields (email not verified, provider is local)
+	if err := h.db.UpdateUserFields(user.ID, false, "local"); err != nil {
+		log.Printf("[Auth] Error updating user fields: %v", err)
+	}
+
+	// Send success response
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "User registered successfully",
+		"id":      user.ID,
+	})
 }
 
 // Login handles user authentication endpoint (POST /auth/login)
