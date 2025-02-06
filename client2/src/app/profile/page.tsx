@@ -1,0 +1,57 @@
+'use client'
+
+import { useSession } from 'next-auth/react'
+import ProfileLayout from '@/components/profile/ProfileLayout'
+import Settings from '@/components/profile/Settings'
+
+export default function Profile() {
+  const { data: session } = useSession()
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-light-background dark:bg-dark-background">
+        <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
+          <div className="text-center text-light-foreground dark:text-dark-foreground">
+            Please log in to view your profile
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const ProfileContent = () => (
+    <div className="space-y-6 p-4">
+      <h3 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
+        Profile
+      </h3>
+
+      <div className="rounded-lg bg-light-card dark:bg-dark-card p-6 shadow-sm">
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-light-foreground dark:text-dark-foreground">
+              Name
+            </label>
+            <div className="mt-1">
+              <p className="text-light-muted dark:text-dark-muted">{session.user?.name}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-light-foreground dark:text-dark-foreground">
+              Email
+            </label>
+            <div className="mt-1">
+              <p className="text-light-muted dark:text-dark-muted">{session.user?.email}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <ProfileLayout settings={<Settings />}>
+      <ProfileContent />
+    </ProfileLayout>
+  )
+}
