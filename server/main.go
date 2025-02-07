@@ -95,6 +95,7 @@ func main() {
 	userDataHandler := handlers.NewUserDataHandler(db)
 	mux.Handle("/api/user/orders", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserOrders)))
 	mux.Handle("/api/user/subscription", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserSubscription)))
+	mux.Handle("/api/user/subscription/billing", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetBillingPortal)))
 
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
