@@ -4,8 +4,6 @@ import { createContext, useContext, useEffect, useState } from 'react'
 
 interface AuthState {
   id: string
-  token: string
-  expiresAt: number
   name: string
   email: string
 }
@@ -23,32 +21,43 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [auth, setAuth] = useState<AuthState | null>(null)
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from cookie
   useEffect(() => {
-    const storedAuth = localStorage.getItem('auth')
-    if (storedAuth) {
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`
+      const parts = value.split(`; ${name}=`)
+      if (parts.length === 2) {
+        const cookieValue = parts.pop()?.split(';').shift()
+        return cookieValue ? decodeURIComponent(cookieValue) : null
+      }
+      return null
+    }
+
+    const authCookie = getCookie('auth')
+    if (authCookie) {
       try {
-        const parsedAuth = JSON.parse(storedAuth)
+        const parsedAuth = JSON.parse(authCookie)
         setAuth(parsedAuth)
       } catch (error) {
-        console.error('Error parsing stored auth:', error)
-        localStorage.removeItem('auth')
+        console.error('Error parsing auth cookie:', error)
+        document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
       }
     }
   }, [])
 
-  // Update localStorage when auth state changes
+  // Update cookie when auth state changes
   useEffect(() => {
     if (auth) {
-      localStorage.setItem('auth', JSON.stringify(auth))
+      const authValue = encodeURIComponent(JSON.stringify(auth))
+      document.cookie = `auth=${authValue}; path=/; secure; samesite=strict`
     } else {
-      localStorage.removeItem('auth')
+      document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
     }
   }, [auth])
 
   const logout = async () => {
     setAuth(null)
-    localStorage.removeItem('auth')
+    document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
   }
 
   return (
