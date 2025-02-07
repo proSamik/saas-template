@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
@@ -20,6 +20,43 @@ interface SubscriptionData {
   renews_at: string
   created_at: string
   updated_at: string
+}
+
+interface BillingPortalResponse {
+  portalURL: string
+}
+
+const ManageSubscriptionButton = ({ customerId }: { customerId: number }) => {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleManageClick = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      const response = await authService.get<BillingPortalResponse>(`/api/user/subscription/billing?customerId=${customerId}`)
+      if (response?.portalURL) {
+        window.location.href = response.portalURL
+      } else {
+        setError('Failed to get billing portal URL')
+      }
+    } catch (err) {
+      console.error('[Subscription] Failed to fetch billing portal:', err)
+      setError('Failed to access billing portal. Please try again later.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      onClick={handleManageClick}
+      disabled={loading}
+    >
+      {loading ? 'Loading...' : 'Manage Subscription'}
+    </button>
+  )
 }
 
 export default function Subscription() {
@@ -151,12 +188,9 @@ export default function Subscription() {
           </div>
 
           <div className="pt-4">
-            <button
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              onClick={() => window.location.href = '/pricing'}
-            >
-              Manage Subscription
-            </button>
+            <Suspense fallback={<div>Loading...</div>}>
+              <ManageSubscriptionButton customerId={subscription.customer_id} />
+            </Suspense>
           </div>
         </div>
       </div>
