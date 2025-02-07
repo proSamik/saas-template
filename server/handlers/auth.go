@@ -218,17 +218,18 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		Expires:  refreshExp,
 	})
 
-	// Set secure cookies
+	// Set refresh token in HTTP-only cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshTokenString,
-		Path:     "/api/auth",
+		Path:     "/auth/refresh",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  refreshExp,
 	})
 
+	// Set CSRF token cookie (not HTTP-only so JS can read it)
 	csrfToken := uuid.New().String()
 	http.SetCookie(w, &http.Cookie{
 		Name:     "csrf_token",
@@ -396,7 +397,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store refresh token in database with device info
-	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
+	if err := h.db.CreateRefreshToken(user.ID, refreshTokenString, userAgent, ipAddress, refreshExp); err != nil {
 		log.Printf("[Auth] Error storing refresh token: %v", err)
 		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
 		return
@@ -417,7 +418,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshTokenString,
-		Path:     "/api/auth",
+		Path:     "/auth/refresh",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
