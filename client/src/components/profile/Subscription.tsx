@@ -6,9 +6,20 @@ import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
 
 interface SubscriptionData {
+  id: number
+  subscription_id: string
+  user_id: string
+  order_id: number
+  customer_id: number
+  product_id: number
+  variant_id: number
+  order_item_id: number
   status: string
-  plan: string
-  expiresAt?: string
+  cancelled: boolean
+  api_url: string
+  renews_at: string
+  created_at: string
+  updated_at: string
 }
 
 export default function Subscription() {
@@ -26,9 +37,9 @@ export default function Subscription() {
   useEffect(() => {
     const fetchSubscription = async () => {
       try {
-        const response = await authService.get<SubscriptionData>('/api/user/subscription')
-        // Handle empty array response as no subscription
-        setSubscription(Array.isArray(response) && response.length === 0 ? null : response)
+        const response = await authService.get<SubscriptionData[]>('/api/user/subscription')
+        // Handle array response - take the first subscription if exists
+        setSubscription(response && response.length > 0 ? response[0] : null)
       } catch (err) {
         console.error('[Subscription] Failed to fetch subscription data:', err)
         if (err instanceof Error) {
@@ -102,31 +113,42 @@ export default function Subscription() {
               Status
             </label>
             <div className="mt-1">
-              <p className="text-light-muted dark:text-dark-muted capitalize">{subscription.status}</p>
+              <p className="text-light-muted dark:text-dark-muted capitalize">
+                {subscription.cancelled ? 'Cancelled' : subscription.status}
+              </p>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-light-foreground dark:text-dark-foreground">
-              Plan
+              Subscription ID
             </label>
             <div className="mt-1">
-              <p className="text-light-muted dark:text-dark-muted">{subscription.plan}</p>
+              <p className="text-light-muted dark:text-dark-muted">{subscription.subscription_id}</p>
             </div>
           </div>
 
-          {subscription.expiresAt && (
-            <div>
-              <label className="block text-sm font-medium text-light-foreground dark:text-dark-foreground">
-                Expires At
-              </label>
-              <div className="mt-1">
-                <p className="text-light-muted dark:text-dark-muted">
-                  {new Date(subscription.expiresAt).toLocaleDateString()}
-                </p>
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-light-foreground dark:text-dark-foreground">
+              Renewal Date
+            </label>
+            <div className="mt-1">
+              <p className="text-light-muted dark:text-dark-muted">
+                {new Date(subscription.renews_at).toLocaleDateString()}
+              </p>
             </div>
-          )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-light-foreground dark:text-dark-foreground">
+              Created At
+            </label>
+            <div className="mt-1">
+              <p className="text-light-muted dark:text-dark-muted">
+                {new Date(subscription.created_at).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
 
           <div className="pt-4">
             <button
