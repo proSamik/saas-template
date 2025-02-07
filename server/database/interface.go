@@ -18,6 +18,7 @@ type DBInterface interface {
 
 	// Token management operations
 	CreateRefreshToken(userID string, tokenHash string, deviceInfo string, ipAddress string, expiresAt time.Time) error
+	GetRefreshToken(tokenHash string) (*models.RefreshToken, error)
 	DeleteAllUserRefreshTokens(userID string) error
 
 	// Token blacklist operations
