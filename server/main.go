@@ -68,9 +68,9 @@ func main() {
 	mux.HandleFunc("/auth/google", authHandler.GoogleAuth)
 	mux.HandleFunc("/auth/reset-password/request", authHandler.RequestPasswordReset)
 	mux.HandleFunc("/auth/reset-password", authHandler.ResetPassword)
+	mux.HandleFunc("/auth/refresh", authHandler.RefreshToken)
 
 	// Auth Routes (protected)
-	mux.Handle("/auth/refresh", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.RefreshToken)))
 	mux.Handle("/auth/logout", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.Logout)))
 	mux.Handle("/auth/account-password/reset", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.AccountPasswordReset)))
 
