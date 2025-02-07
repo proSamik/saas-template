@@ -132,6 +132,17 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Set access token in HTTP-only cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    accessTokenString,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Expires:  accessExp,
+		})
+
 		// Set new refresh token in HTTP-only cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:     "refresh_token",
@@ -165,8 +176,6 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(AuthResponse{
 			ID:        userID,
-			Token:     accessTokenString,
-			ExpiresAt: accessExp.Unix(),
 			Name:      user.Name,
 			Email:     user.Email,
 		})
@@ -219,7 +228,6 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		"email": user.Email,
 	})
 }
-
 
 // validateToken validates a JWT token and returns the parsed token if valid
 func (h *AuthHandler) validateToken(tokenString string) (*jwt.Token, error) {

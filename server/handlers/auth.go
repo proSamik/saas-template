@@ -36,18 +36,9 @@ type AuthHandler struct {
 
 // AuthResponse represents the response body for successful authentication operations
 type AuthResponse struct {
-	ID          string `json:"id"`           // User's unique identifier
-	Token       string `json:"token"`        // JWT access token
-	ExpiresAt   int64  `json:"expiresAt"`    // Access token expiration timestamp
-	Name        string `json:"name"`         // User's display name
-	Email       string `json:"email"`        // User's email address
-	AccessToken string `json:"access_token"` // Google OAuth access token
-	IDToken     string `json:"id_token"`     // Google OAuth ID token
-	User        struct {
-		Email string `json:"email"` // User's Google email
-		Name  string `json:"name"`  // User's Google display name
-		Image string `json:"image"` // User's Google profile image URL
-	} `json:"user"`
+	ID    string `json:"id"`    // User's unique identifier
+	Name  string `json:"name"`  // User's display name
+	Email string `json:"email"` // User's email address
 }
 
 // AuthHandler handles authentication-related HTTP requests and manages user sessions
@@ -216,6 +207,17 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set access token in HTTP-only cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    tokenString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  accessExp,
+	})
+
 	// Set secure cookies
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
@@ -240,11 +242,9 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 
 	// Send response
 	response := AuthResponse{
-		ID:        user.ID,
-		Token:     tokenString,
-		ExpiresAt: accessExp.Unix(),
-		Name:      user.Name,
-		Email:     user.Email,
+		ID:    user.ID,
+		Name:  user.Name,
+		Email: user.Email,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -402,6 +402,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set access token in HTTP-only cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    tokenString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Expires:  accessExp,
+	})
+
 	// Set refresh token in HTTP-only cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
@@ -427,11 +438,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
 	response := AuthResponse{
-		ID:        user.ID,
-		Token:     tokenString,
-		ExpiresAt: accessExp.Unix(),
-		Name:      user.Name,
-		Email:     user.Email,
+		ID:    user.ID,
+		Name:  user.Name,
+		Email: user.Email,
 	}
 
 	log.Printf("[Auth] Login response: %+v", response)
@@ -441,15 +450,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles user logout by blacklisting the current token and invalidating refresh tokens
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Get token from Authorization header
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+	// Get access token from HTTP-only cookie
+	accessCookie, err := r.Cookie("access_token")
+	if err != nil {
+		log.Printf("[Auth] No access token cookie found: %v", err)
+		http.Error(w, "Access token not found", http.StatusUnauthorized)
 		return
 	}
 
-	// Remove "Bearer " prefix
-	tokenString := authHeader[7:] // Skip "Bearer " prefix
+	tokenString := accessCookie.Value
 
 	// Validate the token
 	token, err := h.validateToken(tokenString)
@@ -476,11 +485,41 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		if err := h.db.DeleteAllUserRefreshTokens(userID); err != nil {
 			log.Printf("[Auth] Error invalidating refresh tokens: %v", err)
 		}
+
+		// Clear all auth cookies
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Expires:  time.Now().Add(-1 * time.Hour),
+		})
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    "",
+			Path:     "/api/auth",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Expires:  time.Now().Add(-1 * time.Hour),
+		})
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "csrf_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: false,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Expires:  time.Now().Add(-1 * time.Hour),
+		})
 	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully logged out"})
-
 }
 
 // RequestPasswordReset handles password reset request endpoint (POST /auth/reset-password/request)
