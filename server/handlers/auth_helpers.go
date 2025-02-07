@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -30,14 +29,12 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	handler := refreshLimiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Log request details
 		log.Printf("[Auth] Refresh token request received from IP: %s", r.RemoteAddr)
-		log.Printf("[Auth] Request cookies: %+v", r.Cookies())
 
-		// Get old access token from Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" {
-			// Extract and blacklist the old access token
-			oldTokenString := strings.TrimPrefix(authHeader, "Bearer ")
-			if oldToken, err := jwt.Parse(oldTokenString, func(token *jwt.Token) (interface{}, error) {
+		// Get old access token from cookie
+		accessCookie, err := r.Cookie("access_token")
+		if err == nil && accessCookie.Value != "" {
+			// Parse and validate the old access token
+			if oldToken, err := jwt.Parse(accessCookie.Value, func(token *jwt.Token) (interface{}, error) {
 				return h.jwtSecret, nil
 			}); err == nil && oldToken.Valid {
 				if claims, ok := oldToken.Claims.(jwt.MapClaims); ok {
@@ -85,22 +82,24 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			ipAddress = forwardedFor
 		}
 
-		// Verify refresh token
-		claims := jwt.MapClaims{}
-		token, err := jwt.ParseWithClaims(cookie.Value, claims, func(token *jwt.Token) (interface{}, error) {
-			return h.jwtRefreshSecret, nil
-		})
+		// Verify refresh token directly using the UUID stored in cookie
+		refreshTokenUUID := cookie.Value
 
-		if err != nil || !token.Valid {
+		// Verify refresh token in database using the UUID
+		storedToken, err := h.db.GetRefreshToken(refreshTokenUUID)
+		if err != nil {
+			log.Printf("[Auth] Error verifying refresh token in database: %v", err)
 			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
 			return
 		}
 
-		userID, ok := claims["sub"].(string)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+		if storedToken == nil {
+			log.Printf("[Auth] Refresh token not found in database")
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
 			return
 		}
+
+		userID := storedToken.UserID
 
 		// Generate new tokens with enhanced security
 		accessExp := time.Now().Add(5 * time.Minute)
@@ -147,7 +146,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{
 			Name:     "refresh_token",
 			Value:    refreshTokenString,
-			Path:     "/api/auth",
+			Path:     "/auth/refresh",
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
@@ -175,9 +174,9 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(AuthResponse{
-			ID:        userID,
-			Name:      user.Name,
-			Email:     user.Email,
+			ID:    userID,
+			Name:  user.Name,
+			Email: user.Email,
 		})
 	}))
 	handler.ServeHTTP(w, r)
