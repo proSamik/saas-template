@@ -396,8 +396,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		ipAddress = r.RemoteAddr
 	}
 
-	// Store refresh token in database with device info
-	if err := h.db.CreateRefreshToken(user.ID, refreshTokenString, userAgent, ipAddress, refreshExp); err != nil {
+	// Store refresh token JTI in database with device info
+	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
 		log.Printf("[Auth] Error storing refresh token: %v", err)
 		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
 		return
