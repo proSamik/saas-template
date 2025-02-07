@@ -143,6 +143,24 @@ export const authService = {
     console.log('[Auth] Password reset successful');
   },
 
+  async checkRefreshToken(): Promise<any> {
+    console.log('[Auth] Checking refresh token status...');
+    // Get CSRF token from cookie
+    const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+    
+    if (!csrfToken) {
+      console.log('[Auth] No CSRF token found');
+      throw new Error('No CSRF token found');
+    }
+    
+    const response = await api.post('/auth/refresh', {}, {
+      headers: {
+        'X-CSRF-Token': csrfToken
+      }
+    });
+    return response.data;
+  },
+
   async get<T = any>(url: string): Promise<T> {
     console.log(`[Auth] Sending GET request to ${url}`);
     const response = await api.get<T>(url);
