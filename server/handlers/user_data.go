@@ -2,19 +2,25 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"saas-server/database"
 	"saas-server/middleware"
 	"saas-server/models"
+	"saas-server/pkg/lemonsqueezy"
 )
 
 type UserDataHandler struct {
-	DB database.DBInterface
+	DB     database.DBInterface
+	client *lemonsqueezy.Client
 }
 
 func NewUserDataHandler(db database.DBInterface) *UserDataHandler {
-	return &UserDataHandler{DB: db}
+	return &UserDataHandler{
+		DB:     db,
+		client: lemonsqueezy.NewClient(),
+	}
 }
 
 // GetUserOrders handles GET /api/user/orders
@@ -89,4 +95,40 @@ func (h *UserDataHandler) GetUserSubscription(w http.ResponseWriter, r *http.Req
 	}
 
 	json.NewEncoder(w).Encode([]models.Subscription{*subscription})
+}
+
+// GetBillingPortal handles GET /api/user/subscription/billing
+func (h *UserDataHandler) GetBillingPortal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get customer ID from query parameter
+	customerID := r.URL.Query().Get("customerId")
+	if customerID == "" {
+		http.Error(w, "Customer ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get customer from LemonSqueezy
+	customer, err := h.client.GetCustomer(customerID)
+	if err != nil {
+		fmt.Printf("Error fetching customer: %v\n", err)
+		http.Error(w, "Failed to fetch customer", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract customer portal URL
+	portalURL := customer.Data.Attributes.CustomerPortal.CustomerPortal
+
+	// Return the portal URL
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"portalURL": portalURL,
+	}); err != nil {
+		fmt.Printf("Error encoding response: %v\n", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
