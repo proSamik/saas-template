@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (auth) {
       const authValue = encodeURIComponent(JSON.stringify(auth))
-      document.cookie = `auth=${authValue}; path=/; secure; samesite=strict`
+      document.cookie = `auth=${authValue}; path=/; secure; samesite=strict; max-age=604800`
     } else {
       document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
     }
