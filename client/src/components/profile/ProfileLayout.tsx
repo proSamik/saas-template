@@ -5,16 +5,18 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
-type Tab = 'profile' | 'subscription' | 'settings'
+type Tab = 'profile' | 'subscription' | 'settings' | 'orders'
 
 export default function ProfileLayout({
   children,
   subscription,
   settings,
+  orders,
 }: {
   children: React.ReactNode
   subscription: React.ReactNode
   settings: React.ReactNode
+  orders: React.ReactNode
 }) {
   const [activeTab, setActiveTab] = useState<Tab>('profile')
   const { auth } = useAuth()
@@ -44,6 +46,12 @@ export default function ProfileLayout({
               Subscription
             </button>
             <button
+              onClick={() => setActiveTab('orders')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
+            >
+              Orders
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'settings' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
@@ -70,6 +78,12 @@ export default function ProfileLayout({
                   Subscription
                 </button>
                 <button
+                  onClick={() => setActiveTab('orders')}
+                  className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
+                >
+                  Orders
+                </button>
+                <button
                   onClick={() => setActiveTab('settings')}
                   className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
                 >
@@ -91,8 +105,9 @@ export default function ProfileLayout({
                   transition={{ duration: 0.2 }}
                   className="h-full"
                 >
-                  {activeTab === 'profile' ? children : 
-                   activeTab === 'subscription' ? subscription : settings}
+                  {activeTab === 'profile' ? children :
+                   activeTab === 'subscription' ? subscription :
+                   activeTab === 'orders' ? orders : settings}
                 </motion.div>
               </AnimatePresence>
             </div>
