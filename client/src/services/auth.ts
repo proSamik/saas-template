@@ -4,8 +4,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export interface AuthResponse {
   id: string;
-  token: string;
-  expiresAt: number;
   name: string;
   email: string;
 }
@@ -46,8 +44,8 @@ api.interceptors.response.use(
 
     console.log('[Auth] API Error intercepted:', { status: error.response?.status, url: originalRequest.url });
 
-    // Check if error is due to unauthorized access (401 or 404) and request hasn't been retried
-    if (!(error.response?.status === 401 || error.response?.status === 404) || originalRequest._retry) {
+    // Check if error is due to unauthorized access (401) and request hasn't been retried
+    if (error.response?.status !== 401 || originalRequest._retry) {
       console.log('[Auth] Request failed - not an auth issue or already retried');
       return Promise.reject(error);
     }
@@ -66,10 +64,15 @@ api.interceptors.response.use(
       // Get CSRF token from cookie
       const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
       
+      if (!csrfToken) {
+        console.log('[Auth] No CSRF token found');
+        throw new Error('No CSRF token found');
+      }
+      
       // Attempt to refresh the token with CSRF token
-      const response = await api.post('/auth/refresh', {}, {
+      await api.post('/auth/refresh', {}, {
         headers: {
-          'X-CSRF-Token': csrfToken // Required for server-side CSRF validation
+          'X-CSRF-Token': csrfToken
         }
       });
       console.log('[Auth] Token refresh successful');
@@ -77,20 +80,14 @@ api.interceptors.response.use(
       // Reset refresh attempts on successful refresh
       refreshAttempts = 0;
       
-      // Update access token in memory
-      const { token } = response.data;
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      console.log('[Auth] Updated access token in memory');
-      
-      // Update CSRF token from cookies if present
+      // Get updated CSRF token from cookies if present
       const newCsrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
       if (newCsrfToken && newCsrfToken !== csrfToken) {
         console.log('[Auth] Updated CSRF token from response cookies');
       }
       
-      // Retry original request with new token
-      originalRequest.headers['Authorization'] = `Bearer ${token}`;
-      console.log('[Auth] Retrying original request with new token');
+      // Retry original request
+      console.log('[Auth] Retrying original request');
       return api(originalRequest);
     } catch (refreshError) {
       console.log('[Auth] Token refresh failed, attempts:', refreshAttempts);
@@ -111,7 +108,7 @@ export const authService = {
   },
 
   async googleLogin(code: string): Promise<AuthResponse> {
-    const response = await axios.post(`${API_URL}/auth/google`, { code });
+    const response = await api.post('/auth/google', { code });
     return response.data;
   },
 
@@ -124,25 +121,8 @@ export const authService = {
 
   async logout(): Promise<void> {
     console.log('[Auth] Sending logout request...');
-    const currentAuthHeader = api.defaults.headers.common['Authorization'];
-    try {
-      await api.post('/auth/logout', {}, {
-        headers: currentAuthHeader ? { 'Authorization': currentAuthHeader } : undefined
-      });
-      console.log('[Auth] Logout successful');
-    } finally {
-      this.clearAuthHeader();
-    }
-  },
-
-  async refreshToken(): Promise<AuthResponse> {
-    console.log('[Auth] Sending refresh token request...');
-    const currentAuthHeader = api.defaults.headers.common['Authorization'];
-    const response = await api.post('/auth/refresh', {}, {
-      headers: currentAuthHeader ? { 'Authorization': currentAuthHeader } : undefined
-    });
-    console.log('[Auth] Refresh token response received');
-    return response.data;
+    await api.post('/auth/logout');
+    console.log('[Auth] Logout successful');
   },
 
   async forgotPassword(email: string): Promise<void> {
@@ -159,47 +139,21 @@ export const authService = {
 
   async AccountPasswordReset(currentPassword: string, newPassword: string): Promise<void> {
     console.log('[Auth] Sending reset password request...');
-    const currentAuthHeader = api.defaults.headers.common['Authorization'];
-    await api.post('/auth/account-password/reset', 
-      { currentPassword, newPassword }, 
-      {
-        headers: currentAuthHeader ? { 'Authorization': currentAuthHeader } : undefined
-      }
-    );
+    await api.post('/auth/account-password/reset', { currentPassword, newPassword });
     console.log('[Auth] Password reset successful');
-  },
-
-  setAuthHeader(token: string) {
-    if (!token) {
-      console.log('[Auth] No token provided, skipping header setting');
-      return;
-    }
-    console.log('[Auth] Setting auth header');
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   },
 
   async get<T = any>(url: string): Promise<T> {
     console.log(`[Auth] Sending GET request to ${url}`);
-    const currentAuthHeader = api.defaults.headers.common['Authorization'];
-    const response = await api.get<T>(url, {
-      headers: currentAuthHeader ? { 'Authorization': currentAuthHeader } : undefined
-    });
+    const response = await api.get<T>(url);
     console.log(`[Auth] GET response received from ${url}`);
     return response.data;
   },
 
   async post(url: string, data: any) {
     console.log(`[Auth] Sending POST request to ${url}`);
-    const currentAuthHeader = api.defaults.headers.common['Authorization'];
-    const response = await api.post(url, data, {
-      headers: currentAuthHeader ? { 'Authorization': currentAuthHeader } : undefined
-    });
+    const response = await api.post(url, data);
     console.log(`[Auth] POST response received from ${url}`);
     return response;
-  },
-
-  clearAuthHeader() {
-    console.log('[Auth] Clearing auth header');
-    delete api.defaults.headers.common['Authorization'];
   }
 };
