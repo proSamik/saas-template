@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"saas-server/database"
 
@@ -36,25 +35,25 @@ func NewAuthMiddleware(db *database.DB, jwtSecret string) *AuthMiddleware {
 	}
 }
 
-// RequireAuth is a middleware that checks for a valid JWT token in the Authorization header
+// RequireAuth is a middleware that checks for a valid JWT token in the cookie
 // If the token is valid, it adds the user ID to the request context
 func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Log request details
 		log.Printf("[Auth Middleware] Request received - Method: %s, Path: %s", r.Method, r.URL.Path)
 
-		// Extract token from Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			log.Printf("[Auth Middleware] No Authorization header found")
+		// Extract token from HTTP-only cookie
+		cookie, err := r.Cookie("access_token")
+		if err != nil {
+			log.Printf("[Auth Middleware] No access token cookie found: %v", err)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if tokenString == authHeader {
-			log.Printf("[Auth Middleware] Invalid token format - missing 'Bearer' prefix")
-			http.Error(w, "Invalid token format", http.StatusUnauthorized)
+		tokenString := cookie.Value
+		if tokenString == "" {
+			log.Printf("[Auth Middleware] Empty token in cookie")
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
@@ -113,9 +112,8 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Add user ID to context using both keys for compatibility
+		// Add user ID to context using the typed key only
 		ctx := context.WithValue(r.Context(), UserIDKey, userID)
-		ctx = context.WithValue(ctx, UserIDContextKey, userID)
 
 		log.Printf("[Auth Middleware] Token validated successfully for user: %v", userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
