@@ -5,13 +5,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
-type Tab = 'profile' | 'settings'
+type Tab = 'profile' | 'subscription' | 'settings'
 
 export default function ProfileLayout({
   children,
+  subscription,
   settings,
 }: {
   children: React.ReactNode
+  subscription: React.ReactNode
   settings: React.ReactNode
 }) {
   const [activeTab, setActiveTab] = useState<Tab>('profile')
@@ -36,6 +38,12 @@ export default function ProfileLayout({
               Profile
             </button>
             <button
+              onClick={() => setActiveTab('subscription')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'subscription' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
+            >
+              Subscription
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'settings' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
@@ -54,6 +62,12 @@ export default function ProfileLayout({
                   className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'profile' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
                 >
                   Profile
+                </button>
+                <button
+                  onClick={() => setActiveTab('subscription')}
+                  className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'subscription' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
+                >
+                  Subscription
                 </button>
                 <button
                   onClick={() => setActiveTab('settings')}
@@ -77,7 +91,8 @@ export default function ProfileLayout({
                   transition={{ duration: 0.2 }}
                   className="h-full"
                 >
-                  {activeTab === 'profile' ? children : settings}
+                  {activeTab === 'profile' ? children : 
+                   activeTab === 'subscription' ? subscription : settings}
                 </motion.div>
               </AnimatePresence>
             </div>
