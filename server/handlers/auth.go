@@ -215,7 +215,7 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  accessExp,
+		Expires:  refreshExp,
 	})
 
 	// Set secure cookies
@@ -352,7 +352,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate tokens with enhanced security
-	accessExp := time.Now().Add(5 * time.Minute)
+	accessExp := time.Now().Add(7 * 24 * time.Hour)
 
 	// Generate JTI (JWT ID) for token tracking
 	jti := uuid.New().String()
@@ -410,7 +410,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  accessExp,
+		Expires:  refreshExp,
 	})
 
 	// Set refresh token in HTTP-only cookie
@@ -433,7 +433,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: false,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		Expires:  refreshExp,
 	})
 
 	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
