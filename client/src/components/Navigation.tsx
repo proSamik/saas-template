@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { UserCircleIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
+import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '@/contexts/AuthContext'
 import { authService } from '@/services/auth'
 import { ThemeToggle } from './ThemeToggle'
