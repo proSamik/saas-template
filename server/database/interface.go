@@ -25,12 +25,6 @@ type DBInterface interface {
 	IsTokenBlacklisted(jti string) (bool, error)
 	CleanupExpiredBlacklistedTokens() error
 
-	// Linked accounts operations
-	GetLinkedAccounts(userID string) ([]models.LinkedAccount, error)
-	GetLinkedAccountByProviderEmail(provider, email string) (*models.LinkedAccount, error)
-	CreateLinkedAccount(userID, provider, email string) (*models.LinkedAccount, error)
-	DeleteLinkedAccount(id, userID string) error
-
 	// Password reset operations
 	CreatePasswordResetToken(userID string, token string, expiresAt time.Time) error
 	GetPasswordResetToken(token string) (string, error)
