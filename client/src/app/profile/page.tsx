@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 import ProfileLayout from '@/components/profile/ProfileLayout'
 import Settings from '@/components/profile/Settings'
+import Subscription from '@/components/profile/Subscription'
 
 export default function Profile() {
   const { auth } = useAuth()
@@ -50,7 +51,10 @@ export default function Profile() {
   )
 
   return (
-    <ProfileLayout settings={<Settings />}>
+    <ProfileLayout
+      settings={<Settings />}
+      subscription={<Subscription />}
+    >
       <ProfileContent />
     </ProfileLayout>
   )
