@@ -42,8 +42,11 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 						userID := claims["sub"].(string)
 						exp := int64(claims["exp"].(float64))
 						// Add old token to blacklist
+						log.Printf("[Auth] Attempting to blacklist old access token - JTI: %s, UserID: %s", jti, userID)
 						if err := h.db.AddToBlacklist(jti, userID, time.Unix(exp, 0)); err != nil {
 							log.Printf("[Auth] Error blacklisting old access token: %v", err)
+						} else {
+							log.Printf("[Auth] Successfully blacklisted old access token - JTI: %s", jti)
 						}
 					}
 				}
@@ -82,11 +85,39 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			ipAddress = forwardedFor
 		}
 
-		// Verify refresh token directly using the UUID stored in cookie
-		refreshTokenUUID := cookie.Value
+		// Parse and validate the refresh token
+		refreshToken, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
+			// Validate signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return h.jwtRefreshSecret, nil
+		})
 
-		// Verify refresh token in database using the UUID
-		storedToken, err := h.db.GetRefreshToken(refreshTokenUUID)
+		if err != nil {
+			log.Printf("[Auth] Error parsing refresh token: %v", err)
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		// Validate claims
+		claims, ok := refreshToken.Claims.(jwt.MapClaims)
+		if !ok || !refreshToken.Valid {
+			log.Printf("[Auth] Invalid refresh token claims")
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		// Extract JTI and verify token in database
+		jti, ok := claims["jti"].(string)
+		if !ok {
+			log.Printf("[Auth] Missing JTI claim in refresh token")
+			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		// Verify refresh token in database using the JTI
+		storedToken, err := h.db.GetRefreshToken(jti)
 		if err != nil {
 			log.Printf("[Auth] Error verifying refresh token in database: %v", err)
 			http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
@@ -105,7 +136,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		accessExp := time.Now().Add(5 * time.Minute)
 
 		// Generate JTI for token tracking
-		jti := uuid.New().String()
+		jti = uuid.New().String()
 
 		// Create new access token with minimal claims
 		accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -123,10 +154,25 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 		// Generate new refresh token with device binding
 		refreshExp := time.Now().Add(7 * 24 * time.Hour)
-		refreshTokenString := uuid.New().String()
+		refreshJti := uuid.New().String()
+		refreshToken = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub":  userID,
+			"exp":  refreshExp.Unix(),
+			"jti":  refreshJti,
+			"type": "refresh",
+		})
+
+		refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
+		if err != nil {
+			log.Printf("[Auth] Error generating refresh token: %v", err)
+			http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
+			return
+		}
 
 		// Store refresh token in database with device info
-		if err := h.db.CreateRefreshToken(userID, refreshTokenString, deviceInfo, ipAddress, refreshExp); err != nil {
+		log.Printf("[Auth] Storing refresh token in database - UserID: %s, JTI: %s, Device: %s, IP: %s, Expires: %v",
+			userID, refreshJti, deviceInfo, ipAddress, refreshExp)
+		if err := h.db.CreateRefreshToken(userID, refreshJti, deviceInfo, ipAddress, refreshExp); err != nil {
 			http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
 			return
 		}
