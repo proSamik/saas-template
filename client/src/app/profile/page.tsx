@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import ProfileLayout from '@/components/profile/ProfileLayout'
 import Settings from '@/components/profile/Settings'
 import Subscription from '@/components/profile/Subscription'
+import Orders from '@/components/profile/Orders'
 
 export default function Profile() {
   const { auth } = useAuth()
@@ -54,6 +55,7 @@ export default function Profile() {
     <ProfileLayout
       settings={<Settings />}
       subscription={<Subscription />}
+      orders={<Orders />}
     >
       <ProfileContent />
     </ProfileLayout>
