@@ -140,7 +140,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			Expires:  accessExp,
+			Expires:  refreshExp,
 		})
 
 		// Set new refresh token in HTTP-only cookie
