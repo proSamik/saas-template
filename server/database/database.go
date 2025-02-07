@@ -329,6 +329,36 @@ func (db *DB) CreateRefreshToken(userID string, tokenHash string, deviceInfo str
 	return err
 }
 
+// GetRefreshToken retrieves a refresh token from the database by its hash
+func (db *DB) GetRefreshToken(tokenHash string) (*models.RefreshToken, error) {
+	var token models.RefreshToken
+	query := `
+		SELECT id, user_id, token_hash, device_info, ip_address, expires_at, created_at, last_used_at, is_blocked
+		FROM refresh_tokens
+		WHERE token_hash = $1
+		AND expires_at > CURRENT_TIMESTAMP
+		AND is_blocked = false`
+
+	err := db.QueryRow(query, tokenHash).Scan(
+		&token.ID,
+		&token.UserID,
+		&token.TokenHash,
+		&token.DeviceInfo,
+		&token.IPAddress,
+		&token.ExpiresAt,
+		&token.CreatedAt,
+		&token.LastUsedAt,
+		&token.IsBlocked,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
 // DeleteAllUserRefreshTokens removes all refresh tokens for a user
 func (db *DB) DeleteAllUserRefreshTokens(userID string) error {
 	query := `
