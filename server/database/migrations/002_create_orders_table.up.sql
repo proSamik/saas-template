@@ -3,15 +3,14 @@ CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     order_id INTEGER NOT NULL UNIQUE,
     user_id VARCHAR(255) NOT NULL,
-    user_email VARCHAR(255) NOT NULL,
     customer_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
-    variant_id INTEGER NOT NULL,
     status VARCHAR(50) NOT NULL,
     api_url VARCHAR(255) NOT NULL,
+    refunded_at TIMESTAMP WITH TIME ZONE
+    product_id INTEGER NOT NULL,
+    variant_id INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    refunded_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Create indexes for frequently accessed columns
