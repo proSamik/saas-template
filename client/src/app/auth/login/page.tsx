@@ -32,20 +32,14 @@ export default function Login() {
         email,
         password,
       })
-      console.log('[Auth] Login response received:', { id: response.id, expiresAt: response.expiresAt });
+      console.log('[Auth] Login response received:', { id: response.id });
 
-      // Store the entire auth response
+      // Store the auth response
       setAuth({
         id: response.id,
-        token: response.token,
-        expiresAt: response.expiresAt,
         name: response.name,
         email: response.email
       })
-
-      // Set the auth header for future requests
-      console.log('[Auth] Setting auth header for future requests');
-      authService.setAuthHeader(response.token)
 
       console.log('[Auth] Login successful, redirecting to dashboard');
       router.push('/profile')
@@ -75,14 +69,10 @@ export default function Login() {
               // Update auth state with the response
               setAuth({
                 id: authResponse.id,
-                token: authResponse.token,
-                expiresAt: authResponse.expiresAt,
                 name: authResponse.name,
                 email: authResponse.email
               });
 
-              // Set the auth header for future requests
-              authService.setAuthHeader(authResponse.token);
               router.push('/profile');
               toast.success('Logged in with Google successfully!');
             } catch (error: any) {

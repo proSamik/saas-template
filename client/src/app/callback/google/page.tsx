@@ -37,13 +37,10 @@ export default function GoogleCallback() {
           // Fallback if no opener window exists
           setAuth({
             id: authResponse.id,
-            token: authResponse.token,
-            expiresAt: authResponse.expiresAt,
             name: authResponse.name,
             email: authResponse.email
           })
 
-          authService.setAuthHeader(authResponse.token)
           router.push('/profile')
           toast.success('Logged in with Google successfully!')
         }

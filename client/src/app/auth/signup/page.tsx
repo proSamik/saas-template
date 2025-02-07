@@ -60,14 +60,9 @@ export default function SignUp() {
       // Store the auth response
       setAuth({
         id: response.id,
-        token: response.token,
-        expiresAt: response.expiresAt,
         name: response.name,
         email: response.email
       })
-
-      // Set the auth header for future requests
-      authService.setAuthHeader(response.token)
 
       router.push('/profile')
       toast.success('Account created successfully!')
@@ -96,14 +91,10 @@ export default function SignUp() {
               // Update auth state with the response
               setAuth({
                 id: authResponse.id,
-                token: authResponse.token,
-                expiresAt: authResponse.expiresAt,
                 name: authResponse.name,
                 email: authResponse.email
               });
 
-              // Set the auth header for future requests
-              authService.setAuthHeader(authResponse.token);
               router.push('/profile');
               toast.success('Logged in with Google successfully!');
             } catch (error: any) {
