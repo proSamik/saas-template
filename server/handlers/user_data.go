@@ -95,8 +95,6 @@ func (h *UserDataHandler) GetUserSubscription(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	log.Printf("[UserData] Retrieved subscription for user %s: %+v", userID, subscription)
-
 	json.NewEncoder(w).Encode([]models.Subscription{*subscription})
 }
 
