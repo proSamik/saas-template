@@ -68,9 +68,14 @@ func (h *LemonSqueezyHandler) CreateCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		VariantID  string                 `json:"variantId"`
-		Email      string                 `json:"email"`
-		CustomData map[string]interface{} `json:"customData"`
+		VariantID       string                       `json:"variantId"`
+		Email           string                       `json:"email"`
+		CustomPrice     int                          `json:"customPrice,omitempty"`
+		ProductOptions  lemonsqueezy.ProductOptions  `json:"productOptions,omitempty"`
+		CheckoutOptions lemonsqueezy.CheckoutOptions `json:"checkoutOptions,omitempty"`
+		CheckoutData    lemonsqueezy.CheckoutData    `json:"checkoutData,omitempty"`
+		ExpiresAt       string                       `json:"expiresAt,omitempty"`
+		Preview         bool                         `json:"preview,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -79,7 +84,31 @@ func (h *LemonSqueezyHandler) CreateCheckout(w http.ResponseWriter, r *http.Requ
 	}
 
 	storeID := os.Getenv("LEMON_SQUEEZY_STORE_ID")
-	checkout, err := h.client.CreateCheckout(storeID, req.VariantID, req.Email, req.CustomData)
+	options := map[string]interface{}{
+		"email": req.Email,
+	}
+
+	// Add optional fields if provided
+	if req.CustomPrice > 0 {
+		options["custom_price"] = req.CustomPrice
+	}
+	if req.ProductOptions.EnabledVariants != nil {
+		options["product_options"] = req.ProductOptions
+	}
+	if req.CheckoutOptions.ButtonColor != "" {
+		options["checkout_options"] = req.CheckoutOptions
+	}
+	if req.CheckoutData.DiscountCode != "" || req.CheckoutData.Custom != nil {
+		options["checkout_data"] = req.CheckoutData
+	}
+	if req.ExpiresAt != "" {
+		options["expires_at"] = req.ExpiresAt
+	}
+	if req.Preview {
+		options["preview"] = req.Preview
+	}
+
+	checkout, err := h.client.CreateCheckout(storeID, req.VariantID, options)
 	if err != nil {
 		http.Error(w, "Failed to create checkout", http.StatusInternalServerError)
 		return
