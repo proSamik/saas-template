@@ -2,6 +2,7 @@ package database
 
 import (
 	"saas-server/models"
+	"strconv"
 	"time"
 )
 
@@ -42,9 +43,10 @@ func (db *DB) UpdateSubscription(subscriptionID int, status string, cancelled bo
 // GetSubscriptionByUserID retrieves a subscription by user ID
 func (db *DB) GetSubscriptionByUserID(userID string) (*models.Subscription, error) {
 	var subscription models.Subscription
+	var subscriptionIDInt int
 	query := `
 		SELECT id, subscription_id, user_id, customer_id, product_id, variant_id,
-		       status, cancelled, api_url, renews_at, ends_at, trial_ends_at,
+		       status, cancelled, renews_at, ends_at, trial_ends_at,
 		       created_at, updated_at
 		FROM subscriptions
 		WHERE user_id = $1
@@ -53,14 +55,13 @@ func (db *DB) GetSubscriptionByUserID(userID string) (*models.Subscription, erro
 	`
 	err := db.QueryRow(query, userID).Scan(
 		&subscription.ID,
-		&subscription.SubscriptionID,
+		&subscriptionIDInt,
 		&subscription.UserID,
 		&subscription.CustomerID,
 		&subscription.ProductID,
 		&subscription.VariantID,
 		&subscription.Status,
 		&subscription.Cancelled,
-		&subscription.APIURL,
 		&subscription.RenewsAt,
 		&subscription.EndsAt,
 		&subscription.TrialEndsAt,
@@ -70,5 +71,7 @@ func (db *DB) GetSubscriptionByUserID(userID string) (*models.Subscription, erro
 	if err != nil {
 		return nil, err
 	}
+	// Convert subscription_id to string
+	subscription.SubscriptionID = strconv.Itoa(subscriptionIDInt)
 	return &subscription, nil
 }
