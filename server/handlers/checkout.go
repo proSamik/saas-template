@@ -49,8 +49,10 @@ func (h *CheckoutHandler) CreateCheckout(w http.ResponseWriter, r *http.Request)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"portalURL": customer.Data.Attributes.CustomerPortal.CustomerPortal,
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": map[string]string{
+				"portalURL": customer.Data.Attributes.CustomerPortal.CustomerPortal,
+			},
 		})
 		return
 	}
@@ -86,7 +88,9 @@ func (h *CheckoutHandler) CreateCheckout(w http.ResponseWriter, r *http.Request)
 	checkoutURL := checkout.Data.Attributes.URL
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"checkoutURL": checkoutURL,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"data": map[string]string{
+			"checkoutURL": checkoutURL,
+		},
 	})
 }
