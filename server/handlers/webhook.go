@@ -114,7 +114,8 @@ func validateWebhookSignature(payload []byte, signature string, secret string) b
 	return hmac.Equal([]byte(signature), []byte(expectedSignature))
 }
 
-// Database interface defines methods for database operations
+// Database defines the minimal database operations required by the webhook handler
+// Implemented by database.DBInterface
 type Database interface {
 	// Order operations
 	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
@@ -122,7 +123,7 @@ type Database interface {
 
 	// Subscription operations
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
-	CreateSubscription(userID string, subscriptionID int, customerID int, productID int, variantID int, status string, apiURL string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, apiURL string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	UpdateSubscription(subscriptionID int, status string, cancelled bool, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 }
 
@@ -258,6 +259,7 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		err2 = h.DB.CreateSubscription(
 			userID,
 			subscriptionID,
+			subscriptionAttrs.OrderID,
 			subscriptionAttrs.CustomerID,
 			subscriptionAttrs.ProductID,
 			subscriptionAttrs.VariantID,
