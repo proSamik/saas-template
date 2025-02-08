@@ -2,11 +2,11 @@
 CREATE TABLE IF NOT EXISTS subscriptions (
     id SERIAL PRIMARY KEY,
     subscription_id INTEGER NOT NULL UNIQUE,
+    order_id INTEGER NOT NULL,
     user_id UUID NOT NULL,
     customer_id INTEGER NOT NULL,
     status VARCHAR(50) NOT NULL,
     cancelled BOOLEAN NOT NULL DEFAULT FALSE,
-    api_url VARCHAR(255) NOT NULL,
     renews_at TIMESTAMP WITH TIME ZONE,
     ends_at TIMESTAMP WITH TIME ZONE,
     product_id INTEGER NOT NULL,

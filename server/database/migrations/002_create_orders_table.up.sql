@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS orders (
     user_id VARCHAR(255) NOT NULL,
     customer_id INTEGER NOT NULL,
     status VARCHAR(50) NOT NULL,
-    receipt_url VARCHAR(255) NOT NULL,
     refunded_at TIMESTAMP WITH TIME ZONE,
     product_id INTEGER NOT NULL,
     variant_id INTEGER NOT NULL,
