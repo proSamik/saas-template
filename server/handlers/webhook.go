@@ -123,8 +123,8 @@ type Database interface {
 
 	// Subscription operations
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
-	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, apiURL string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
-	UpdateSubscription(subscriptionID int, status string, cancelled bool, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 }
 
 type WebhookHandler struct {
@@ -264,15 +264,24 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			subscriptionAttrs.ProductID,
 			subscriptionAttrs.VariantID,
 			subscriptionAttrs.Status,
-			payload.Data.Links.Self,
 			subscriptionAttrs.RenewsAt,
 			subscriptionAttrs.EndsAt,
 			subscriptionAttrs.TrialEndsAt,
 		)
 		log.Printf("[Webhook] Processed subscription creation")
 
-	case "subscription_updated", "subscription_payment_success", "subscription_payment_recovered", "subscription_plan_changed":
-		log.Printf("[Webhook] Processing subscription update/payment/plan change")
+	case "subscription_updated", 
+		"subscription_payment_success", 
+		"subscription_payment_recovered", 
+		"subscription_plan_changed", 
+		"subscription_paused", 
+		"subscription_cancelled", 
+		"subscription_expired", 
+		"subscription_unpaused", 
+		"subscription_resumed", 
+		"subscription_payment_failed", 
+		"subscription_payment_refunded":
+		log.Printf("[Webhook] Processing subscription event: %s", payload.Meta.EventName)
 		subscriptionID, err := strconv.Atoi(payload.Data.ID)
 		if err != nil {
 			log.Printf("[Webhook] Error converting subscription ID: %v", err)
@@ -280,117 +289,38 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Determine subscription status and cancellation state based on event type
+		status := subscriptionAttrs.Status
+		cancelled := subscriptionAttrs.Cancelled
+
+		switch payload.Meta.EventName {
+		case "subscription_cancelled", "subscription_expired":
+			cancelled = true
+		case "subscription_unpaused", "subscription_resumed":
+			status = "active"
+			cancelled = false
+		case "subscription_payment_failed":
+			status = "failed"
+			cancelled = false
+		case "subscription_payment_refunded":
+			status = "refunded"
+			cancelled = false
+		case "subscription_paused":
+			status = "pause"
+			cancelled = false
+		}
+
 		err2 = h.DB.UpdateSubscription(
 			subscriptionID,
-			subscriptionAttrs.Status,
-			subscriptionAttrs.Cancelled,
+			status,
+			cancelled,
+			subscriptionAttrs.ProductID,
+			subscriptionAttrs.VariantID,
 			subscriptionAttrs.RenewsAt,
 			subscriptionAttrs.EndsAt,
 			subscriptionAttrs.TrialEndsAt,
 		)
-		log.Printf("[Webhook] Processed subscription update/payment/plan change")
-
-	case "subscription_cancelled", "subscription_expired":
-		log.Printf("[Webhook] Processing subscription cancellation/expiration")
-		subscriptionID, err := strconv.Atoi(payload.Data.ID)
-		if err != nil {
-			log.Printf("[Webhook] Error converting subscription ID: %v", err)
-			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
-			return
-		}
-
-		var endDate *time.Time
-		if subscriptionAttrs.RenewsAt != nil && subscriptionAttrs.RenewsAt.After(time.Now()) {
-			endDate = subscriptionAttrs.RenewsAt
-		} else {
-			endDate = subscriptionAttrs.EndsAt
-		}
-
-		err2 = h.DB.UpdateSubscription(
-			subscriptionID,
-			subscriptionAttrs.Status,
-			true,
-			nil,
-			endDate,
-			nil,
-		)
-		log.Printf("[Webhook] Processed subscription cancellation/expiration")
-
-	case "subscription_paused":
-		log.Printf("[Webhook] Processing subscription pause")
-		subscriptionID, err := strconv.Atoi(payload.Data.ID)
-		if err != nil {
-			log.Printf("[Webhook] Error converting subscription ID: %v", err)
-			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
-			return
-		}
-
-		err2 = h.DB.UpdateSubscription(
-			subscriptionID,
-			"paused",
-			false,
-			nil,
-			nil,
-			nil,
-		)
-		log.Printf("[Webhook] Processed subscription pause")
-
-	case "subscription_unpaused", "subscription_resumed":
-		log.Printf("[Webhook] Processing subscription unpause/resume")
-		subscriptionID, err := strconv.Atoi(payload.Data.ID)
-		if err != nil {
-			log.Printf("[Webhook] Error converting subscription ID: %v", err)
-			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
-			return
-		}
-
-		err2 = h.DB.UpdateSubscription(
-			subscriptionID,
-			"active",
-			false,
-			subscriptionAttrs.RenewsAt,
-			nil,
-			nil,
-		)
-		log.Printf("[Webhook] Processed subscription unpause/resume")
-
-	case "subscription_payment_failed":
-		log.Printf("[Webhook] Processing failed payment")
-		subscriptionID, err := strconv.Atoi(payload.Data.ID)
-		if err != nil {
-			log.Printf("[Webhook] Error converting subscription ID: %v", err)
-			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
-			return
-		}
-
-		err2 = h.DB.UpdateSubscription(
-			subscriptionID,
-			"failed",
-			false,
-			nil,
-			nil,
-			nil,
-		)
-		log.Printf("[Webhook] Processed failed payment")
-
-	case "subscription_payment_refunded":
-		log.Printf("[Webhook] Processing subscription payment refund")
-		subscriptionID, err := strconv.Atoi(payload.Data.ID)
-		if err != nil {
-			log.Printf("[Webhook] Error converting subscription ID: %v", err)
-			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
-			return
-		}
-
-		err2 = h.DB.UpdateSubscription(
-			subscriptionID,
-			"refunded",
-			false,
-			nil,
-			nil,
-			nil,
-		)
-		log.Printf("[Webhook] Processed subscription payment refund")
+		log.Printf("[Webhook] Processed subscription event: %s", payload.Meta.EventName)
 
 	default:
 		log.Printf("[Webhook] Unhandled event type: %s", payload.Meta.EventName)
