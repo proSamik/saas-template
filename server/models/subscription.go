@@ -15,7 +15,6 @@ type Subscription struct {
 	OrderItemID    int        `json:"order_item_id"`
 	Status         string     `json:"status"`
 	Cancelled      bool       `json:"cancelled"`
-	APIURL         string     `json:"api_url"`
 	RenewsAt       *time.Time `json:"renews_at,omitempty"`
 	EndsAt         *time.Time `json:"ends_at,omitempty"`
 	TrialEndsAt    *time.Time `json:"trial_ends_at,omitempty"`
