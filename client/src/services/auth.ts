@@ -38,7 +38,7 @@ const MAX_REFRESH_ATTEMPTS = 5;
 
 // Intercept responses to handle token refresh
 api.interceptors.response.use(
-  (response) => response,
+  response => response.data, // Return response.data directly for successful requests
   async (error) => {
     const originalRequest = error.config;
 
@@ -102,19 +102,19 @@ api.interceptors.response.use(
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     console.log('[Auth] Sending login request...');
-    const response = await api.post('/auth/login', credentials);
+    const response = await api.post<AuthResponse>('/auth/login', credentials);
     console.log('[Auth] Login response received');
     return response.data;
   },
 
   async googleLogin(code: string): Promise<AuthResponse> {
-    const response = await api.post('/auth/google', { code });
+    const response = await api.post<AuthResponse>('/auth/google', { code });
     return response.data;
   },
 
   async register(credentials: LoginCredentials): Promise<AuthResponse> {
     console.log('[Auth] Sending registration request...');
-    const response = await api.post('/auth/register', credentials);
+    const response = await api.post<AuthResponse>('/auth/register', credentials);
     console.log('[Auth] Registration response received');
     return response.data;
   },
@@ -158,7 +158,7 @@ export const authService = {
         'X-CSRF-Token': csrfToken
       }
     });
-    return response.data;
+    return response;
   },
 
   async get<T = any>(url: string): Promise<T> {
