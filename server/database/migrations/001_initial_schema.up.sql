@@ -1,15 +1,13 @@
 -- Create users table
--- Create membership status enum type
-CREATE TYPE membership_type AS ENUM ('free', 'pro', 'promax');
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255),
     name VARCHAR(255) NOT NULL,
-    membership_status membership_type DEFAULT 'free' NOT NULL,
-    end_date DATE DEFAULT NULL,
-    subscription_id INTEGER DEFAULT NULL,
+    latest_subscription_id INTEGER DEFAULT NULL,
+    latest_product_id INTEGER DEFAULT NULL,
+    latest_variant_id INTEGER DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
