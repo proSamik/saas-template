@@ -18,7 +18,16 @@ export default function ProfileLayout({
   settings: React.ReactNode
   orders: React.ReactNode
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>('profile')
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = sessionStorage.getItem('activeProfileTab')
+      if (savedTab === 'subscription') {
+        sessionStorage.removeItem('activeProfileTab')
+        return 'subscription'
+      }
+    }
+    return 'profile'
+  })
   const { auth } = useAuth()
   const router = useRouter()
 
