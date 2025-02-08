@@ -125,6 +125,7 @@ type Database interface {
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
 	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error
 }
 
 type WebhookHandler struct {
@@ -268,18 +269,38 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			subscriptionAttrs.EndsAt,
 			subscriptionAttrs.TrialEndsAt,
 		)
-		log.Printf("[Webhook] Processed subscription creation")
+		if err2 != nil {
+			log.Printf("[Webhook] Error creating subscription: %v", err2)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
-	case "subscription_updated", 
-		"subscription_payment_success", 
-		"subscription_payment_recovered", 
-		"subscription_plan_changed", 
-		"subscription_paused", 
-		"subscription_cancelled", 
-		"subscription_expired", 
-		"subscription_unpaused", 
-		"subscription_resumed", 
-		"subscription_payment_failed", 
+		err2 = h.DB.UpdateUserSubscription(
+			userID,
+			subscriptionID,
+			subscriptionAttrs.Status,
+			subscriptionAttrs.ProductID,
+			subscriptionAttrs.VariantID,
+			subscriptionAttrs.RenewsAt,
+			subscriptionAttrs.EndsAt,
+		)
+		if err2 != nil {
+			log.Printf("[Webhook] Error updating user subscription: %v", err2)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("[Webhook] Successfully processed subscription creation")
+
+	case "subscription_updated",
+		"subscription_payment_success",
+		"subscription_payment_recovered",
+		"subscription_plan_changed",
+		"subscription_paused",
+		"subscription_cancelled",
+		"subscription_expired",
+		"subscription_unpaused",
+		"subscription_resumed",
+		"subscription_payment_failed",
 		"subscription_payment_refunded":
 		log.Printf("[Webhook] Processing subscription event: %s", payload.Meta.EventName)
 		subscriptionID, err := strconv.Atoi(payload.Data.ID)
@@ -320,6 +341,34 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			subscriptionAttrs.EndsAt,
 			subscriptionAttrs.TrialEndsAt,
 		)
+		if err2 != nil {
+			log.Printf("[Webhook] Error updating subscription: %v", err2)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Update user's subscription details
+		if len(payload.Meta.CustomData) > 0 {
+			userID := payload.Meta.CustomData["user_id"]
+			log.Printf("[Webhook] Updating user subscription details - UserID: %s", userID)
+			err2 = h.DB.UpdateUserSubscription(
+				userID,
+				subscriptionID,
+				status,
+				subscriptionAttrs.ProductID,
+				subscriptionAttrs.VariantID,
+				subscriptionAttrs.RenewsAt,
+				subscriptionAttrs.EndsAt,
+			)
+			if err2 != nil {
+				log.Printf("[Webhook] Error updating user subscription: %v", err2)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			log.Printf("[Webhook] Successfully updated user subscription details")
+		} else {
+			log.Printf("[Webhook] Skipping user subscription update - no user_id in CustomData")
+		}
 		log.Printf("[Webhook] Processed subscription event: %s", payload.Meta.EventName)
 
 	default:
