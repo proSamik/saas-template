@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255),
     name VARCHAR(255) NOT NULL,
     latest_subscription_id INTEGER DEFAULT NULL,
-    latest_product_id INTEGER DEFAULT NULL,
-    latest_variant_id INTEGER DEFAULT NULL,
     latest_status VARCHAR(255) DEFAULT NULL,
     latest_renewal_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     latest_end_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
