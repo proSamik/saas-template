@@ -10,7 +10,10 @@ import (
 	"net/http"
 	"os"
 	"saas-server/models"
+	"strconv"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type WebhookPayload struct {
@@ -37,16 +40,24 @@ type WebhookLinks struct {
 type WebhookAttributes interface{}
 
 type OrderAttributes struct {
-	StoreID        int        `json:"store_id"`
-	CustomerID     int        `json:"customer_id"`
-	OrderID        int        `json:"order_number"`
-	Status         string     `json:"status"`
-	UserName       string     `json:"user_name"`
-	UserEmail      string     `json:"user_email"`
-	Refunded       bool       `json:"refunded"`
-	RefundedAt     *time.Time `json:"refunded_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	StoreID                 int        `json:"store_id"`
+	CustomerID              int        `json:"customer_id"`
+	OrderID                 int        `json:"order_number"`
+	Status                  string     `json:"status"`
+	UserName                string     `json:"user_name"`
+	UserEmail               string     `json:"user_email"`
+	Refunded                bool       `json:"refunded"`
+	RefundedAt              *time.Time `json:"refunded_at"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
+	SubtotalFormatted       string     `json:"subtotal_formatted"`
+	TaxFormatted            string     `json:"tax_formatted"`
+	TotalFormatted          string     `json:"total_formatted"`
+	TaxInclusive            bool       `json:"tax_inclusive"`
+	RefundedAmountFormatted string     `json:"refunded_amount_formatted"`
+	URLs                    struct {
+		Receipt string `json:"receipt"`
+	} `json:"urls"`
 	FirstOrderItem struct {
 		ProductID int `json:"product_id"`
 		VariantID int `json:"variant_id"`
@@ -103,17 +114,16 @@ func validateWebhookSignature(payload []byte, signature string, secret string) b
 	return hmac.Equal([]byte(signature), []byte(expectedSignature))
 }
 
-// Handler handles HTTP requests
 // Database interface defines methods for database operations
 type Database interface {
 	// Order operations
-	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error
-	UpdateOrderRefund(orderID int, refundedAt *time.Time) error
+	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
+	UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmountFormatted string) error
 
 	// Subscription operations
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
-	CreateSubscription(subscription *models.Subscription) error
-	UpdateSubscription(subscriptionID string, status string, cancelled bool, variantID int, orderItemID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	CreateSubscription(userID string, subscriptionID int, customerID int, productID int, variantID int, status string, apiURL string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	UpdateSubscription(subscriptionID int, status string, cancelled bool, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 }
 
 type WebhookHandler struct {
@@ -158,6 +168,7 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	// Parse attributes based on event type
 	var orderAttrs OrderAttributes
 	var subscriptionAttrs SubscriptionAttributes
+	var err2 error
 
 	// Convert attributes to appropriate type based on event
 	switch payload.Meta.EventName {
@@ -193,71 +204,84 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	switch payload.Meta.EventName {
 	case "order_created":
 		log.Printf("[Webhook] Processing order creation")
-		// Check if CustomData is available
 		if len(payload.Meta.CustomData) == 0 {
 			log.Printf("[Webhook] Error: No user ID provided in CustomData")
 			http.Error(w, "Missing user ID in CustomData", http.StatusBadRequest)
 			return
 		}
-		// Create order record
-		err = h.DB.CreateOrder(
+		err2 = h.DB.CreateOrder(
 			payload.Meta.CustomData["user_id"],
 			orderAttrs.OrderID,
 			orderAttrs.CustomerID,
 			orderAttrs.FirstOrderItem.ProductID,
 			orderAttrs.FirstOrderItem.VariantID,
-			orderAttrs.UserEmail,
 			orderAttrs.Status,
+			orderAttrs.SubtotalFormatted,
+			orderAttrs.TaxFormatted,
+			orderAttrs.TotalFormatted,
+			orderAttrs.TaxInclusive,
 		)
 		log.Printf("[Webhook] Processed order creation")
 
 	case "order_refunded":
 		log.Printf("[Webhook] Processing order refund")
-		// Update order status and refund timestamp
-		err = h.DB.UpdateOrderRefund(
+		err2 = h.DB.UpdateOrderRefund(
 			orderAttrs.OrderID,
 			orderAttrs.RefundedAt,
+			orderAttrs.RefundedAmountFormatted,
 		)
 		log.Printf("[Webhook] Processed order refund")
 
 	case "subscription_created":
 		log.Printf("[Webhook] Processing subscription creation")
-		// Check if CustomData is available
 		if len(payload.Meta.CustomData) == 0 {
 			log.Printf("[Webhook] Error: No user ID provided in CustomData")
 			http.Error(w, "Missing user ID in CustomData", http.StatusBadRequest)
 			return
 		}
-		// Create subscription record
-		subscription := &models.Subscription{
-			SubscriptionID: payload.Data.ID,
-			UserID:         payload.Meta.CustomData["user_id"],
-			OrderID:        subscriptionAttrs.OrderID,
-			CustomerID:     subscriptionAttrs.CustomerID,
-			ProductID:      subscriptionAttrs.ProductID,
-			VariantID:      subscriptionAttrs.VariantID,
-			OrderItemID:    subscriptionAttrs.OrderItemID,
-			Status:         subscriptionAttrs.Status,
-			Cancelled:      subscriptionAttrs.Cancelled,
-			APIURL:         payload.Data.Links.Self,
-			RenewsAt:       subscriptionAttrs.RenewsAt,
-			EndsAt:         subscriptionAttrs.EndsAt,
-			TrialEndsAt:    subscriptionAttrs.TrialEndsAt,
-			CreatedAt:      subscriptionAttrs.CreatedAt,
-			UpdatedAt:      subscriptionAttrs.UpdatedAt,
+
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
 		}
-		err = h.DB.CreateSubscription(subscription)
+
+		// Parse user ID as UUID
+		userID := payload.Meta.CustomData["user_id"]
+		if _, err := uuid.Parse(userID); err != nil {
+			log.Printf("[Webhook] Error: Invalid UUID format for user ID: %v", err)
+			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+			return
+		}
+
+		err2 = h.DB.CreateSubscription(
+			userID,
+			subscriptionID,
+			subscriptionAttrs.CustomerID,
+			subscriptionAttrs.ProductID,
+			subscriptionAttrs.VariantID,
+			subscriptionAttrs.Status,
+			payload.Data.Links.Self,
+			subscriptionAttrs.RenewsAt,
+			subscriptionAttrs.EndsAt,
+			subscriptionAttrs.TrialEndsAt,
+		)
 		log.Printf("[Webhook] Processed subscription creation")
 
 	case "subscription_updated", "subscription_payment_success", "subscription_payment_recovered", "subscription_plan_changed":
 		log.Printf("[Webhook] Processing subscription update/payment/plan change")
-		// Update subscription using existing UpdateSubscription function
-		err = h.DB.UpdateSubscription(
-			payload.Data.ID,
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
+		}
+
+		err2 = h.DB.UpdateSubscription(
+			subscriptionID,
 			subscriptionAttrs.Status,
 			subscriptionAttrs.Cancelled,
-			subscriptionAttrs.VariantID,
-			subscriptionAttrs.OrderItemID,
 			subscriptionAttrs.RenewsAt,
 			subscriptionAttrs.EndsAt,
 			subscriptionAttrs.TrialEndsAt,
@@ -266,20 +290,24 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_cancelled", "subscription_expired":
 		log.Printf("[Webhook] Processing subscription cancellation/expiration")
-		// Determine the end date based on renewal schedule
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
+		}
+
 		var endDate *time.Time
 		if subscriptionAttrs.RenewsAt != nil && subscriptionAttrs.RenewsAt.After(time.Now()) {
 			endDate = subscriptionAttrs.RenewsAt
 		} else {
 			endDate = subscriptionAttrs.EndsAt
 		}
-		// Update subscription status using existing UpdateSubscription function
-		err = h.DB.UpdateSubscription(
-			payload.Data.ID,
+
+		err2 = h.DB.UpdateSubscription(
+			subscriptionID,
 			subscriptionAttrs.Status,
 			true,
-			subscriptionAttrs.VariantID,
-			subscriptionAttrs.OrderItemID,
 			nil,
 			endDate,
 			nil,
@@ -288,13 +316,17 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_paused":
 		log.Printf("[Webhook] Processing subscription pause")
-		// Update subscription status using existing UpdateSubscription function
-		err = h.DB.UpdateSubscription(
-			payload.Data.ID,
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
+		}
+
+		err2 = h.DB.UpdateSubscription(
+			subscriptionID,
 			"paused",
 			false,
-			subscriptionAttrs.VariantID,
-			subscriptionAttrs.OrderItemID,
 			nil,
 			nil,
 			nil,
@@ -303,13 +335,17 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_unpaused", "subscription_resumed":
 		log.Printf("[Webhook] Processing subscription unpause/resume")
-		// Update subscription status using existing UpdateSubscription function
-		err = h.DB.UpdateSubscription(
-			payload.Data.ID,
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
+		}
+
+		err2 = h.DB.UpdateSubscription(
+			subscriptionID,
 			"active",
 			false,
-			subscriptionAttrs.VariantID,
-			subscriptionAttrs.OrderItemID,
 			subscriptionAttrs.RenewsAt,
 			nil,
 			nil,
@@ -318,13 +354,17 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_payment_failed":
 		log.Printf("[Webhook] Processing failed payment")
-		// Update subscription status using existing UpdateSubscription function
-		err = h.DB.UpdateSubscription(
-			payload.Data.ID,
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
+		}
+
+		err2 = h.DB.UpdateSubscription(
+			subscriptionID,
 			"failed",
 			false,
-			subscriptionAttrs.VariantID,
-			subscriptionAttrs.OrderItemID,
 			nil,
 			nil,
 			nil,
@@ -333,13 +373,17 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	case "subscription_payment_refunded":
 		log.Printf("[Webhook] Processing subscription payment refund")
-		// Update subscription status using existing UpdateSubscription function
-		err = h.DB.UpdateSubscription(
-			payload.Data.ID,
+		subscriptionID, err := strconv.Atoi(payload.Data.ID)
+		if err != nil {
+			log.Printf("[Webhook] Error converting subscription ID: %v", err)
+			http.Error(w, "Invalid subscription ID", http.StatusBadRequest)
+			return
+		}
+
+		err2 = h.DB.UpdateSubscription(
+			subscriptionID,
 			"refunded",
 			false,
-			subscriptionAttrs.VariantID,
-			subscriptionAttrs.OrderItemID,
 			nil,
 			nil,
 			nil,
@@ -352,8 +396,8 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err != nil {
-		log.Printf("[Webhook] Error processing webhook: %v", err)
+	if err2 != nil {
+		log.Printf("[Webhook] Error processing webhook: %v", err2)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

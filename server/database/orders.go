@@ -6,7 +6,7 @@ import (
 )
 
 // CreateOrder creates a new order record in the database
-func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, receiptURL string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error {
+func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error {
 	query := `
 		INSERT INTO orders (
 			user_id, order_id, customer_id, product_id, variant_id, 
@@ -16,7 +16,7 @@ func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID,
-		status, receiptURL, subtotalFormatted, taxFormatted, totalFormatted, taxInclusive)
+		status, subtotalFormatted, taxFormatted, totalFormatted, taxInclusive)
 	return err
 }
 
@@ -48,7 +48,7 @@ func (db *DB) UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmou
 // GetUserOrders retrieves all orders for a given user
 func (db *DB) GetUserOrders(userID string) ([]models.Orders, error) {
 	query := `
-		SELECT id, order_id, user_id, customer_id, status, receipt_url,
+		SELECT id, order_id, user_id, customer_id, status,
 		       refunded_at, product_id, variant_id, subtotal_formatted,
 		       tax_formatted, total_formatted, tax_inclusive, refunded_amount_formatted,
 		       created_at, updated_at
@@ -71,7 +71,6 @@ func (db *DB) GetUserOrders(userID string) ([]models.Orders, error) {
 			&order.UserID,
 			&order.CustomerID,
 			&order.Status,
-			&order.ReceiptURL,
 			&order.RefundedAt,
 			&order.ProductID,
 			&order.VariantID,

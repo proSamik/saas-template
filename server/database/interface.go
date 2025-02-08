@@ -32,7 +32,7 @@ type DBInterface interface {
 	MarkPasswordResetTokenUsed(token string) error
 
 	// Order operations
-	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, receiptURL string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
+	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
 	GetUserOrders(userID string) ([]models.Orders, error)
 	UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmountFormatted string) error
 

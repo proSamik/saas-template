@@ -10,9 +10,9 @@ func (db *DB) CreateSubscription(userID string, subscriptionID int, customerID i
 	query := `
 		INSERT INTO subscriptions (
 			subscription_id, user_id, customer_id, product_id, variant_id,
-			status, cancelled, api_url, renews_at, ends_at, trial_ends_at,
+			status, api_url, renews_at, ends_at, trial_ends_at,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 	_, err := db.Exec(query,
 		subscriptionID, userID, customerID, productID, variantID,

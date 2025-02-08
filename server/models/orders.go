@@ -12,7 +12,6 @@ type Orders struct {
 	ProductID               int        `json:"product_id"`
 	VariantID               int        `json:"variant_id"`
 	Status                  string     `json:"status"`
-	ReceiptURL              string     `json:"receipt_url"`
 	SubtotalFormatted       string     `json:"subtotal_formatted"`
 	TaxFormatted            string     `json:"tax_formatted"`
 	TotalFormatted          string     `json:"total_formatted"`
