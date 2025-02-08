@@ -1,3 +1,4 @@
+//  This component is for one time buy, if we are offering any one time buy
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -56,7 +57,7 @@ export default function Orders() {
     return (
       <div className="space-y-6 p-4">
         <h3 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
-          Orders
+          Lifetime Deals
         </h3>
         <div className="rounded-lg bg-light-card dark:bg-dark-card p-6 shadow-sm">
           <p className="text-light-muted dark:text-dark-muted">Loading order history...</p>
@@ -69,7 +70,7 @@ export default function Orders() {
     return (
       <div className="space-y-6 p-4">
         <h3 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
-          Orders
+        Lifetime Deals
         </h3>
         <div className="rounded-lg bg-light-card dark:bg-dark-card p-6 shadow-sm">
           <p className="text-red-500 dark:text-red-400">{error}</p>
@@ -82,7 +83,7 @@ export default function Orders() {
     return (
       <div className="space-y-6 p-4">
         <h3 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
-          Orders
+        Lifetime Deals
         </h3>
         <div className="rounded-lg bg-light-card dark:bg-dark-card p-6 shadow-sm">
           <p className="text-light-muted dark:text-dark-muted">No orders found</p>
@@ -94,7 +95,7 @@ export default function Orders() {
   return (
     <div className="space-y-6 p-4">
       <h3 className="text-2xl font-semibold text-light-foreground dark:text-dark-foreground">
-        Orders
+      Lifetime Deals
       </h3>
 
       <div className="rounded-lg bg-light-card dark:bg-dark-card p-6 shadow-sm">
