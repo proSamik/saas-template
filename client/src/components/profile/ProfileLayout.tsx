@@ -41,28 +41,28 @@ export default function ProfileLayout({
       <div className="w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         {/* Mobile Tabs */}
         <div className="sm:hidden mb-4 mt-16">
-          <div className="flex space-x-2 bg-light-card dark:bg-dark-card rounded-lg p-1 shadow-sm">
+          <div className="grid grid-cols-2 gap-2 bg-light-card dark:bg-dark-card rounded-lg p-2 shadow-sm">
             <button
               onClick={() => setActiveTab('profile')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'profile' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
+              className={`px-4 py-3 text-sm font-medium rounded-md transition-colors ${activeTab === 'profile' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
               Profile
             </button>
             <button
               onClick={() => setActiveTab('subscription')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'subscription' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
+              className={`px-4 py-3 text-sm font-medium rounded-md transition-colors ${activeTab === 'subscription' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
               Subscription
             </button>
             <button
               onClick={() => setActiveTab('orders')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
+              className={`px-4 py-3 text-sm font-medium rounded-md transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
-              Orders
+              Lifetime Deals
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'settings' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
+              className={`px-4 py-3 text-sm font-medium rounded-md transition-colors ${activeTab === 'settings' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'text-light-foreground dark:text-dark-foreground'}`}
             >
               Settings
             </button>
@@ -90,7 +90,7 @@ export default function ProfileLayout({
                   onClick={() => setActiveTab('orders')}
                   className={`w-full text-left px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'orders' ? 'bg-light-accent dark:bg-dark-accent dark:text-white' : 'hover:bg-light-hover dark:hover:bg-dark-hover text-light-foreground dark:text-dark-foreground'}`}
                 >
-                  Orders
+                  Lifetime Deals
                 </button>
                 <button
                   onClick={() => setActiveTab('settings')}
