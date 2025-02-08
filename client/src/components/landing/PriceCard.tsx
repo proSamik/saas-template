@@ -52,17 +52,17 @@ export function PriceCard({
       });
 
       const data = response.data;
-      if (data.checkoutURL) {
-        // Validate the checkout URL before opening
+      if (data.checkoutURL || data.portalURL) {
+        // Validate and use the appropriate URL
         try {
-          const checkoutUrl = new URL(data.checkoutURL);
-          window.location.href = checkoutUrl.toString();
+          const redirectUrl = new URL(data.portalURL || data.checkoutURL);
+          window.location.href = redirectUrl.toString();
         } catch (urlError) {
-          console.error('Invalid checkout URL:', urlError);
-          toast.error('Invalid checkout URL received');
+          console.error('Invalid URL received:', urlError);
+          toast.error('Invalid URL received');
         }
       } else {
-        toast.error('No checkout URL received');
+        toast.error('No valid URL received');
       }
     } catch (error: any) {
       console.error('Error:', error);
