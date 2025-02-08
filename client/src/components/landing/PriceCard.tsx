@@ -56,7 +56,11 @@ export function PriceCard({
         // Validate and use the appropriate URL
         try {
           const redirectUrl = new URL(data.portalURL || data.checkoutURL);
-          window.location.href = redirectUrl.toString();
+          if (data.checkoutURL) {
+            window.open(redirectUrl.toString(), '_blank');
+          } else {
+            window.location.href = redirectUrl.toString();
+          }
         } catch (urlError) {
           console.error('Invalid URL received:', urlError);
           toast.error('Invalid URL received');
