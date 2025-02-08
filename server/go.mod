@@ -14,7 +14,7 @@ require (
 require github.com/stretchr/testify v1.10.0 // indirect
 
 require (
-	github.com/NdoleStudio/lemonsqueezy-go v1.2.4
+	// github.com/NdoleStudio/lemonsqueezy-go v1.2.4
 	golang.org/x/oauth2 v0.25.0
 	google.golang.org/api v0.219.0
 )
