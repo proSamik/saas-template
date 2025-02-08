@@ -55,11 +55,14 @@ export function PriceCard({
       if (data.checkoutURL || data.portalURL) {
         // Validate and use the appropriate URL
         try {
-          const redirectUrl = new URL(data.portalURL || data.checkoutURL);
-          if (data.checkoutURL) {
+          if (data.portalURL) {
+            // Redirect to profile page with subscription tab
+            router.push('/profile');
+            // Set subscription tab active in profile layout
+            sessionStorage.setItem('activeProfileTab', 'subscription');
+          } else if (data.checkoutURL) {
+            const redirectUrl = new URL(data.checkoutURL);
             window.open(redirectUrl.toString(), '_blank');
-          } else {
-            window.location.href = redirectUrl.toString();
           }
         } catch (urlError) {
           console.error('Invalid URL received:', urlError);
