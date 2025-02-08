@@ -32,13 +32,26 @@ const api = axios.create({
   }
 });
 
-// Track refresh attempts
+// Track refresh attempts and retry status
 let refreshAttempts = 0;
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
 const MAX_REFRESH_ATTEMPTS = 5;
+
+// Subscribe to token refresh
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+  refreshSubscribers.push(cb);
+};
+
+// Notify subscribers about new token
+const onRefreshed = (token: string) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
 
 // Intercept responses to handle token refresh
 api.interceptors.response.use(
-  response => response.data, // Return response.data directly for successful requests
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
@@ -56,8 +69,20 @@ api.interceptors.response.use(
       return Promise.reject(new Error('Maximum refresh attempts reached'));
     }
 
-    console.log('[Auth] Attempting to refresh token...');
+    // If already refreshing, wait for the token
+    if (isRefreshing) {
+      return new Promise((resolve) => {
+        subscribeTokenRefresh((token: string) => {
+          if (originalRequest.headers) {
+            originalRequest.headers['X-CSRF-Token'] = token;
+          }
+          resolve(api(originalRequest));
+        });
+      });
+    }
+
     originalRequest._retry = true;
+    isRefreshing = true;
     refreshAttempts++;
 
     try {
@@ -84,16 +109,21 @@ api.interceptors.response.use(
       const newCsrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
       if (newCsrfToken && newCsrfToken !== csrfToken) {
         console.log('[Auth] Updated CSRF token from response cookies');
+        onRefreshed(newCsrfToken);
+      } else {
+        onRefreshed(csrfToken);
       }
       
       // Retry original request
       console.log('[Auth] Retrying original request');
+      isRefreshing = false;
       return api(originalRequest);
     } catch (refreshError) {
       console.log('[Auth] Token refresh failed, attempts:', refreshAttempts);
       if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
         console.log('[Auth] Maximum refresh attempts reached, redirecting to login');
       }
+      isRefreshing = false;
       return Promise.reject(refreshError);
     }
   }
