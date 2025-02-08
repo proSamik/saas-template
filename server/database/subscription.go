@@ -6,34 +6,36 @@ import (
 )
 
 // CreateSubscription creates a new subscription record in the database
-func (db *DB) CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, apiURL string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
+func (db *DB) CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
 	query := `
 		INSERT INTO subscriptions (
 			subscription_id, user_id, order_id, customer_id, product_id, variant_id,
-			status, api_url, renews_at, ends_at, trial_ends_at,
+			status, renews_at, ends_at, trial_ends_at,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 	`
 	_, err := db.Exec(query,
 		subscriptionID, userID, orderID, customerID, productID, variantID,
-		status, apiURL, renewsAt, endsAt, trialEndsAt,
+		status, renewsAt, endsAt, trialEndsAt,
 	)
 	return err
 }
 
 // UpdateSubscription updates an existing subscription record
-func (db *DB) UpdateSubscription(subscriptionID int, status string, cancelled bool, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
+func (db *DB) UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error {
 	query := `
 		UPDATE subscriptions 
 		SET status = $1,
 		    cancelled = $2,
-		    renews_at = $3,
-		    ends_at = $4,
-		    trial_ends_at = $5,
+		    product_id = $3,
+		    variant_id = $4,
+		    renews_at = $5,
+		    ends_at = $6,
+		    trial_ends_at = $7,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE subscription_id = $6
+		WHERE subscription_id = $8
 	`
-	_, err := db.Exec(query, status, cancelled, renewsAt, endsAt, trialEndsAt, subscriptionID)
+	_, err := db.Exec(query, status, cancelled, productID, variantID, renewsAt, endsAt, trialEndsAt, subscriptionID)
 	return err
 }
 
