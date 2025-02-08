@@ -1,22 +1,22 @@
 package database
 
 import (
-	"fmt"
 	"saas-server/models"
 	"time"
 )
 
 // CreateOrder creates a new order record in the database
-func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, userEmail string, status string) error {
+func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, receiptURL string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error {
 	query := `
 		INSERT INTO orders (
 			user_id, order_id, customer_id, product_id, variant_id, 
-			user_email, status, api_url, created_at, updated_at
+			status, receipt_url, subtotal_formatted, tax_formatted, total_formatted,
+			tax_inclusive, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	apiURL := fmt.Sprintf("https://api.lemonsqueezy.com/v1/orders/%d", orderID)
-	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID, userEmail, status, apiURL)
+	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID,
+		status, receiptURL, subtotalFormatted, taxFormatted, totalFormatted, taxInclusive)
 	return err
 }
 
@@ -31,21 +31,27 @@ func (db *DB) UpdateOrderStatus(orderID int, status string, refunded bool, refun
 	return err
 }
 
-// UpdateOrderRefund updates the order's refund status and timestamp
-func (db *DB) UpdateOrderRefund(orderID int, refundedAt *time.Time) error {
+// UpdateOrderRefund updates the order's refund status and related information
+func (db *DB) UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmountFormatted string) error {
 	query := `
 		UPDATE orders
-		SET status = 'refunded', refunded_at = $1, updated_at = NOW()
-		WHERE order_id = $2`
+		SET status = 'refunded', 
+		    refunded_at = $1,
+		    refunded_amount_formatted = $2,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE order_id = $3`
 
-	_, err := db.Exec(query, refundedAt, orderID)
+	_, err := db.Exec(query, refundedAt, refundedAmountFormatted, orderID)
 	return err
 }
 
 // GetUserOrders retrieves all orders for a given user
 func (db *DB) GetUserOrders(userID string) ([]models.Orders, error) {
 	query := `
-		SELECT id, user_id, order_id, customer_id, product_id, variant_id, user_email, status, created_at, updated_at, refunded_at
+		SELECT id, order_id, user_id, customer_id, status, receipt_url,
+		       refunded_at, product_id, variant_id, subtotal_formatted,
+		       tax_formatted, total_formatted, tax_inclusive, refunded_amount_formatted,
+		       created_at, updated_at
 		FROM orders
 		WHERE user_id = $1
 		ORDER BY created_at DESC`
@@ -61,16 +67,21 @@ func (db *DB) GetUserOrders(userID string) ([]models.Orders, error) {
 		var order models.Orders
 		err := rows.Scan(
 			&order.ID,
-			&order.UserID,
 			&order.OrderID,
+			&order.UserID,
 			&order.CustomerID,
+			&order.Status,
+			&order.ReceiptURL,
+			&order.RefundedAt,
 			&order.ProductID,
 			&order.VariantID,
-			&order.UserEmail,
-			&order.Status,
+			&order.SubtotalFormatted,
+			&order.TaxFormatted,
+			&order.TotalFormatted,
+			&order.TaxInclusive,
+			&order.RefundedAmountFormatted,
 			&order.CreatedAt,
 			&order.UpdatedAt,
-			&order.RefundedAt,
 		)
 		if err != nil {
 			return nil, err
