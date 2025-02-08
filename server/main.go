@@ -97,6 +97,10 @@ func main() {
 	mux.Handle("/api/user/subscription", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetUserSubscription)))
 	mux.Handle("/api/user/subscription/billing", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetBillingPortal)))
 
+	// Analytics routes (public)
+	analyticsHandler := handlers.NewAnalyticsHandler(db)
+	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
+
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins:      []string{"http://localhost:3000", os.Getenv("FRONTEND_URL")}, // Add your frontend URL
