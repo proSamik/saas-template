@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import Navigation from '@/components/Navigation'
+import PageView from '@/components/PageView'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -28,6 +29,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <Navigation />
+            <PageView />
             {children}
             <Toaster 
               position="bottom-right"
