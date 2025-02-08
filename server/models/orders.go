@@ -5,16 +5,20 @@ import (
 )
 
 type Orders struct {
-	ID         int        `json:"id"`
-	OrderID    int        `json:"order_id"`
-	UserID     string     `json:"user_id"`
-	UserEmail  string     `json:"user_email"`
-	CustomerID int        `json:"customer_id"`
-	ProductID  int        `json:"product_id"`
-	VariantID  int        `json:"variant_id"`
-	Status     string     `json:"status"`
-	APIURL     string     `json:"api_url"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
-	RefundedAt *time.Time `json:"refunded_at,omitempty"`
+	ID                      int        `json:"id"`
+	OrderID                 int        `json:"order_id"`
+	UserID                  string     `json:"user_id"`
+	CustomerID              int        `json:"customer_id"`
+	ProductID               int        `json:"product_id"`
+	VariantID               int        `json:"variant_id"`
+	Status                  string     `json:"status"`
+	ReceiptURL              string     `json:"receipt_url"`
+	SubtotalFormatted       string     `json:"subtotal_formatted"`
+	TaxFormatted            string     `json:"tax_formatted"`
+	TotalFormatted          string     `json:"total_formatted"`
+	TaxInclusive            bool       `json:"tax_inclusive"`
+	RefundedAt              *time.Time `json:"refunded_at,omitempty"`
+	RefundedAmountFormatted string     `json:"refunded_amount_formatted,omitempty"`
+	CreatedAt               time.Time  `json:"created_at"`
+	UpdatedAt               time.Time  `json:"updated_at"`
 }
