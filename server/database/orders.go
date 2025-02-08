@@ -10,10 +10,10 @@ func (db *DB) CreateOrder(userID string, orderID int, customerID int, productID 
 	query := `
 		INSERT INTO orders (
 			user_id, order_id, customer_id, product_id, variant_id, 
-			status, receipt_url, subtotal_formatted, tax_formatted, total_formatted,
+			status, subtotal_formatted, tax_formatted, total_formatted,
 			tax_inclusive, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
 	_, err := db.Exec(query, userID, orderID, customerID, productID, variantID,
 		status, subtotalFormatted, taxFormatted, totalFormatted, taxInclusive)
