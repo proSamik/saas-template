@@ -1,17 +1,17 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
+	"saas-server/database"
+	"saas-server/pkg/lemonsqueezy"
 	"strconv"
-
-	"github.com/NdoleStudio/lemonsqueezy-go"
 )
 
 type CheckoutHandler struct {
 	client *lemonsqueezy.Client
+	db     database.DBInterface
 }
 
 type CheckoutRequest struct {
@@ -21,10 +21,8 @@ type CheckoutRequest struct {
 	UserID    string `json:"userId"`
 }
 
-func NewCheckoutHandler() *CheckoutHandler {
-	apiKey := os.Getenv("LEMON_SQUEEZY_API_KEY")
-	client := lemonsqueezy.New(lemonsqueezy.WithAPIKey(apiKey))
-	return &CheckoutHandler{client: client}
+func NewCheckoutHandler(db database.DBInterface) *CheckoutHandler {
+	return &CheckoutHandler{client: lemonsqueezy.NewClient(), db: db}
 }
 
 // CreateCheckout handles POST /api/checkout
@@ -40,6 +38,23 @@ func (h *CheckoutHandler) CreateCheckout(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Check if user already has a subscription
+	subscription, err := h.db.GetSubscriptionByUserID(req.UserID)
+	if err == nil && subscription != nil {
+		// User has an active subscription, get their customer portal URL
+		customer, err := h.client.GetCustomer(strconv.Itoa(subscription.CustomerID))
+		if err != nil {
+			http.Error(w, "Failed to fetch customer portal", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"portalURL": customer.Data.Attributes.CustomerPortal.CustomerPortal,
+		})
+		return
+	}
+
 	// Get and validate required environment variables
 	storeIDStr := os.Getenv("LEMON_SQUEEZY_STORE_ID")
 	signingSecret := os.Getenv("LEMON_SQUEEZY_SIGNING_SECRET")
@@ -49,35 +64,29 @@ func (h *CheckoutHandler) CreateCheckout(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Convert store ID to integer
-	storeID, err := strconv.Atoi(storeIDStr)
-	if err != nil {
-		http.Error(w, "Invalid store ID configuration", http.StatusInternalServerError)
-		return
-	}
-
-	variantID, err := strconv.Atoi(req.VariantID)
-	if err != nil {
-		http.Error(w, "Invalid variant ID", http.StatusBadRequest)
-		return
-	}
-
-	checkout, _, err := h.client.Checkouts.Create(context.Background(), storeID, variantID, &lemonsqueezy.CheckoutCreateAttributes{
-		CheckoutData: lemonsqueezy.CheckoutCreateData{
-			Email: req.Email,
-			Custom: map[string]any{
-				"user_id": req.UserID,
+	checkout, err := h.client.CreateCheckout(
+		storeIDStr,
+		req.VariantID,
+		map[string]interface{}{
+			"email": req.Email,
+			"checkout_data": lemonsqueezy.CheckoutData{
+				Custom: map[string]interface{}{
+					"user_id": req.UserID,
+				},
 			},
 		},
-	})
+	)
 
 	if err != nil {
 		http.Error(w, "Failed to create checkout", http.StatusInternalServerError)
 		return
 	}
 
+	// Extract checkout URL from the response
+	checkoutURL := checkout.Data.Attributes.URL
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"checkoutURL": checkout.Data.Attributes.URL,
+		"checkoutURL": checkoutURL,
 	})
 }
