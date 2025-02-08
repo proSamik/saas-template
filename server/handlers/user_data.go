@@ -89,10 +89,13 @@ func (h *UserDataHandler) GetUserSubscription(w http.ResponseWriter, r *http.Req
 	// Get subscription from database
 	subscription, err := h.DB.GetSubscriptionByUserID(userID)
 	if err != nil {
+		log.Printf("[UserData] Error getting subscription for user %s: %v", userID, err)
 		// Return empty array for any database error (no rows, table doesn't exist, or other errors)
 		json.NewEncoder(w).Encode([]models.Subscription{})
 		return
 	}
+
+	log.Printf("[UserData] Retrieved subscription for user %s: %+v", userID, subscription)
 
 	json.NewEncoder(w).Encode([]models.Subscription{*subscription})
 }
