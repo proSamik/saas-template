@@ -88,7 +88,7 @@ func main() {
 	mux.HandleFunc("/api/products/store/", productsHandler.GetProductsByStore)
 
 	// Checkout routes
-	checkoutHandler := handlers.NewCheckoutHandler()
+	checkoutHandler := handlers.NewCheckoutHandler(db)
 	mux.HandleFunc("/api/checkout", checkoutHandler.CreateCheckout)
 
 	// User data routes (protected)
