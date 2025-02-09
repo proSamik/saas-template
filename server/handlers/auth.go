@@ -566,12 +566,17 @@ func (h *AuthHandler) RequestPasswordReset(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// TODO: Send email with reset link
+	// Send email with reset link
 	resetLink := fmt.Sprintf("%s/auth/reset-password?token=%s", os.Getenv("FRONTEND_URL"), token)
-	log.Printf("[Auth] ============================================")
-	log.Printf("[Auth] Password reset link for %s:", user.Email)
-	log.Printf("[Auth] %s", resetLink)
-	log.Printf("[Auth] ============================================")
+	if err := sendPasswordResetEmail(user.Email, resetLink); err != nil {
+		log.Printf("[Auth] Error sending password reset email: %v", err)
+		// Don't expose the error to the client for security
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "If your email is registered, you will receive a password reset link",
+		})
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
