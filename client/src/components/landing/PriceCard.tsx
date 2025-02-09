@@ -37,7 +37,7 @@ export function PriceCard({
 
     if (!isAuthenticated) {
       sessionStorage.setItem('pendingPurchase', JSON.stringify({ productId, variantId }));
-      router.push('/auth/login', { scroll: false });
+      router.push('/auth', { scroll: false });
       return;
     }
 

@@ -64,7 +64,7 @@ export default function Subscription() {
   const router = useRouter()
 
   if (!auth) {
-    router.push('/auth/login')
+    router.push('/auth')
     return null
   }
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)

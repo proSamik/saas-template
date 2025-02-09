@@ -10,7 +10,7 @@ export default function Settings() {
   const router = useRouter()
 
   if (!auth) {
-    router.push('/auth/login')
+    router.push('/auth')
     return null
   }
   const [currentPassword, setCurrentPassword] = useState('')

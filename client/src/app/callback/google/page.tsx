@@ -17,7 +17,7 @@ export default function GoogleCallback() {
 
     if (!code) {
       toast.error('Authentication failed')
-      router.push('/auth/login')
+      router.push('/auth')
       return
     }
 
@@ -54,7 +54,7 @@ export default function GoogleCallback() {
           window.close()
         } else {
           toast.error(error.response?.data?.message || 'Failed to authenticate with Google')
-          router.push('/auth/login')
+          router.push('/auth')
         }
       }
     }

@@ -25,7 +25,7 @@ export default function Orders() {
   const router = useRouter()
 
   if (!auth) {
-    router.push('/auth/login')
+    router.push('/auth')
     return null
   }
 

@@ -152,16 +152,10 @@ const Navigation = () => {
             ) : (
               <div className="flex items-center space-x-4">
                 <Link
-                  href="/auth/login"
-                  className="text-light-foreground dark:text-dark-foreground hover:text-primary-500"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/auth/signup"
+                  href="/auth"
                   className="rounded-md bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-400"
                 >
-                  Sign up
+                  Sign in / up
                 </Link>
               </div>
             )}
@@ -211,18 +205,11 @@ const Navigation = () => {
             {!auth && (
               <div className="border-t border-light-accent dark:border-dark-accent px-4 py-2">
                 <Link
-                  href="/auth/login"
+                  href="/auth"
                   className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Sign in
-                </Link>
-                <Link
-                  href="/auth/signup"
-                  className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Sign up
+                  Sign in / up
                 </Link>
               </div>
             )}

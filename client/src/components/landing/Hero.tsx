@@ -35,7 +35,7 @@ export function Hero() {
               <ArrowRightIcon className="ml-2 -mr-1 h-4 w-4 inline-block" />
             </Link>
             <Link
-              href="/auth/login"
+              href="/auth"
               className="text-sm font-semibold leading-6"
             >
               Sign in <span aria-hidden="true">→</span>
