@@ -9,15 +9,24 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID            string    `json:"id"`                                 // Unique identifier for the user
-	UserID        string    `json:"user_id" db:"user_id"`               // Public user identifier
-	Email         string    `json:"email"`                              // User's email address
-	Password      string    `json:"password"`                           // Hashed password
-	Name          string    `json:"name"`                               // User's display name
-	EmailVerified bool      `json:"email_verified" db:"email_verified"` // Whether the email has been verified
-	Provider      string    `json:"provider" db:"provider"`             // Authentication provider (email, google, etc.)
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`         // When the user was created
-	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`         // When the user was last updated
+	ID                string     `json:"id"`
+	Email             string     `json:"email"`
+	Password          string     `json:"-"`
+	Name              string     `json:"name"`
+	LatestStatus      string     `json:"latest_status"`
+	LatestProductID   int        `json:"latest_product_id"`
+	LatestVariantID   int        `json:"latest_variant_id"`
+	LatestRenewalDate *time.Time `json:"latest_renewal_date"`
+	LatestEndDate     *time.Time `json:"latest_end_date"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+// UserSubscriptionStatus represents the subscription status of a user
+type UserSubscriptionStatus struct {
+	Status    string `json:"status"`
+	ProductID int    `json:"product_id"`
+	VariantID int    `json:"variant_id"`
 }
 
 // HashPassword hashes the user's password using bcrypt
