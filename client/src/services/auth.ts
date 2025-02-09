@@ -8,6 +8,12 @@ export interface AuthResponse {
   email: string;
 }
 
+export interface VerifyUserResponse {
+  status: string;
+  product_id: number;
+  variant_id: number;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -189,6 +195,13 @@ export const authService = {
       }
     });
     return response;
+  },
+
+  async verifyUser(): Promise<VerifyUserResponse> {
+    console.log('[Auth] Verifying user subscription status...');
+    const response = await api.get<VerifyUserResponse>('/user/verify-user');
+    console.log('[Auth] User verification response:', response.data);
+    return response.data;
   },
 
   async get<T = any>(url: string): Promise<T> {
