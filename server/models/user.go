@@ -24,9 +24,9 @@ type User struct {
 
 // UserSubscriptionStatus represents the subscription status of a user
 type UserSubscriptionStatus struct {
-	Status    string `json:"status"`
-	ProductID int    `json:"product_id"`
-	VariantID int    `json:"variant_id"`
+	Status    *string `json:"status"`
+	ProductID *int    `json:"product_id"`
+	VariantID *int    `json:"variant_id"`
 }
 
 // HashPassword hashes the user's password using bcrypt
