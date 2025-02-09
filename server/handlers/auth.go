@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -20,6 +21,7 @@ import (
 
 	"saas-server/database"
 	"saas-server/middleware"
+	"saas-server/models"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -76,6 +78,13 @@ type ResetPasswordRequest struct {
 	Token       string `json:"token"`    // Password reset token
 	NewPassword string `json:"password"` // New password to set
 }
+
+// Cache for subscription status to reduce database load
+var (
+	subscriptionCache = make(map[string]*models.UserSubscriptionStatus)
+	cacheMutex        sync.RWMutex
+	cacheExpiry       = 5 * time.Minute
+)
 
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
 func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
@@ -697,4 +706,62 @@ func (h *AuthHandler) AccountPasswordReset(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Password updated successfully.",
 	})
+}
+
+// VerifyUser returns the user's subscription status and product details
+func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Try to get status from cache first
+	cacheMutex.RLock()
+	if status, exists := subscriptionCache[userID]; exists {
+		cacheMutex.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+		return
+	}
+	cacheMutex.RUnlock()
+
+	// Create a channel for the database response
+	statusChan := make(chan *models.UserSubscriptionStatus, 1)
+	errChan := make(chan error, 1)
+
+	// Query database in a goroutine
+	go func() {
+		status, err := h.db.GetUserSubscriptionStatus(userID)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		statusChan <- status
+
+		// Update cache in background
+		cacheMutex.Lock()
+		subscriptionCache[userID] = status
+		cacheMutex.Unlock()
+
+		// Set up cache expiry
+		time.AfterFunc(cacheExpiry, func() {
+			cacheMutex.Lock()
+			delete(subscriptionCache, userID)
+			cacheMutex.Unlock()
+		})
+	}()
+
+	// Wait for result with timeout
+	select {
+	case status := <-statusChan:
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	case err := <-errChan:
+		log.Printf("[Auth] Error getting subscription status: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	case <-time.After(5 * time.Second):
+		log.Printf("[Auth] Timeout getting subscription status for user: %s", userID)
+		http.Error(w, "Request timeout", http.StatusGatewayTimeout)
+	}
 }
