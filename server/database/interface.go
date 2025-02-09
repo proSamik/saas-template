@@ -15,6 +15,7 @@ type DBInterface interface {
 	UpdatePassword(id, hashedPassword string) error
 	UpdateUserFields(id string, emailVerified bool, provider string) error
 	UserExists(email string) (bool, error)
+	GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error)
 
 	// Token management operations
 	CreateRefreshToken(userID string, tokenHash string, deviceInfo string, ipAddress string, expiresAt time.Time) error
@@ -36,4 +37,13 @@ type DBInterface interface {
 
 	// Subscription operations
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
+
+	// Additional operations
+	InvalidateSession(token string) error
+	InvalidateRefreshTokensForUser(userID string) error
+	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
+	UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmountFormatted string) error
+	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
+	UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error
 }
