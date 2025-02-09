@@ -28,7 +28,7 @@ export default function DashboardPage() {
         const response = await authService.verifyUser();
         
         // If user doesn't have an active subscription, redirect to pricing
-        if (!response.status || response.status !== 'active') {
+        if (response === null ||  (!response.status || response.status !== 'active')) {
           console.log('User does not have an active subscription');
           router.push('/#pricing');
           return;
