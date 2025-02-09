@@ -173,23 +173,48 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 
 // GetUserSubscriptionStatus retrieves only the subscription-related fields
 func (db *DB) GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error) {
-	var status models.UserSubscriptionStatus
+	var nullStatus sql.NullString
+	var nullProductID sql.NullInt64
+	var nullVariantID sql.NullInt64
+
 	query := `
 		SELECT latest_status, latest_product_id, latest_variant_id
 		FROM users
 		WHERE id = $1`
 
 	err := db.QueryRow(query, id).Scan(
-		&status.Status,
-		&status.ProductID,
-		&status.VariantID,
+		&nullStatus,
+		&nullProductID,
+		&nullVariantID,
 	)
 
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 
-	return &status, nil
+	// Only create the status object if at least one field is not null
+	if !nullStatus.Valid && !nullProductID.Valid && !nullVariantID.Valid {
+		return nil, nil
+	}
+
+	status := &models.UserSubscriptionStatus{}
+
+	if nullStatus.Valid {
+		status.Status = &nullStatus.String
+	}
+	if nullProductID.Valid {
+		productID := int(nullProductID.Int64)
+		status.ProductID = &productID
+	}
+	if nullVariantID.Valid {
+		variantID := int(nullVariantID.Int64)
+		status.VariantID = &variantID
+	}
+
+	return status, nil
 }
 
 // UserExists checks if a user with the given email already exists
