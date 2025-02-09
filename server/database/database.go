@@ -27,6 +27,13 @@ func New(dataSourceName string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Configure connection pool
+	db.SetMaxOpenConns(25)                 // Maximum number of open connections to the database
+	db.SetMaxIdleConns(10)                 // Maximum number of connections in the idle connection pool
+	db.SetConnMaxLifetime(5 * time.Minute) // Maximum amount of time a connection may be reused
+	db.SetConnMaxIdleTime(1 * time.Minute) // Maximum amount of time a connection may be idle
+
 	if err = db.Ping(); err != nil {
 		return nil, err
 	}
@@ -132,11 +139,14 @@ func (db *DB) InvalidateRefreshTokensForUser(userID string) error {
 	return err
 }
 
-// GetUserByID retrieves a user by their unique identifier
+// GetUserByID retrieves all user details by their unique identifier
 func (db *DB) GetUserByID(id string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, email, password, name, created_at, updated_at
+		SELECT id, email, password, name, 
+			latest_status, latest_product_id, latest_variant_id,
+			latest_renewal_date, latest_end_date,
+			created_at, updated_at
 		FROM users
 		WHERE id = $1`
 
@@ -145,13 +155,41 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.Name,
+		&user.LatestStatus,
+		&user.LatestProductID,
+		&user.LatestVariantID,
+		&user.LatestRenewalDate,
+		&user.LatestEndDate,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &user, nil
+}
+
+// GetUserSubscriptionStatus retrieves only the subscription-related fields
+func (db *DB) GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error) {
+	var status models.UserSubscriptionStatus
+	query := `
+		SELECT latest_status, latest_product_id, latest_variant_id
+		FROM users
+		WHERE id = $1`
+
+	err := db.QueryRow(query, id).Scan(
+		&status.Status,
+		&status.ProductID,
+		&status.VariantID,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &status, nil
 }
 
 // UserExists checks if a user with the given email already exists
