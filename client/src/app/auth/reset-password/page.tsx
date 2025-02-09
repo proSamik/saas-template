@@ -7,13 +7,15 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { authService } from '@/services/auth'
+import { AuthError } from '@/components/auth/error'
 
-export default function ResetPassword() {
+export default function ResetPasswordPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isLoading, setIsLoading] = useState(false)
-
   const token = searchParams.get('token')
+  
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | undefined>(undefined)
 
   const validatePassword = (password: string): string[] => {
     const errors: string[] = []
@@ -25,50 +27,46 @@ export default function ResetPassword() {
     return errors
   }
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     setIsLoading(true)
+    setError(undefined)
 
-    const formData = new FormData(event.currentTarget)
+    if (!token) {
+      setError('Invalid or expired reset token')
+      setIsLoading(false)
+      return
+    }
+
+    const formData = new FormData(e.currentTarget)
     const password = formData.get('password') as string
     const confirmPassword = formData.get('confirmPassword') as string
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match')
+      setError('Passwords do not match')
       setIsLoading(false)
       return
     }
 
     const passwordErrors = validatePassword(password)
     if (passwordErrors.length > 0) {
-      setIsLoading(false)
+      setError(passwordErrors.join(' '))
       passwordErrors.forEach(error => toast.error(error))
-      return
-    }
-
-    if (!token) {
-      toast.error('Invalid or expired reset token')
-      router.push('/auth/forgot-password')
+      setIsLoading(false)
       return
     }
 
     try {
       await authService.resetPassword(token, password)
-      toast.success('Password has been reset successfully')
-      router.push('/auth/login')
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to reset password')
-      if (error.response?.status === 401) {
-        router.push('/auth/forgot-password')
-      }
+      toast.success('Password reset successfully')
+      router.push('/auth?view=login')
+    } catch (err: any) {
+      const message = err.response?.data?.message || 'Failed to reset password'
+      setError(message)
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (!token) {
-    router.push('/auth/forgot-password')
-    return null
   }
 
   return (
@@ -78,13 +76,12 @@ export default function ResetPassword() {
           <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
             Reset your password
           </h2>
-          <p className="mt-2 text-center text-sm text-light-muted dark:text-dark-muted">
-            Enter your new password below.
-          </p>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-light-background dark:bg-dark-background px-4 py-8 shadow sm:rounded-lg sm:px-10">
+          <div className="bg-light-card dark:bg-dark-card px-4 py-8 shadow sm:rounded-lg sm:px-10">
+            <AuthError message={error} />
+
             <form className="space-y-6" onSubmit={onSubmit}>
               <Input
                 id="password"
