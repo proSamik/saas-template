@@ -107,7 +107,7 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	var req GoogleAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[Auth] Error decoding request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -115,19 +115,20 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	config := &goauth.Config{
 		ClientID:     h.googleClientID,
 		ClientSecret: h.googleClientSecret,
-		RedirectURL:  h.googleRedirectURL, // This matches the redirect URI in Google Console
+		RedirectURL:  h.googleRedirectURL,
 		Scopes: []string{
 			"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile",
 		},
 		Endpoint: google.Endpoint,
 	}
+
 	// Exchange authorization code for token
 	token, err := config.Exchange(context.Background(), req.Code)
-	log.Printf("[Auth] Exchanging code with redirect URI: %s, received code: %s", config.RedirectURL, req.Code)
+	log.Printf("[Auth] Exchanging code with redirect URI: %s", config.RedirectURL)
 	if err != nil {
 		log.Printf("[Auth] Failed to exchange auth code: %v", err)
-		http.Error(w, "Failed to authenticate with Google", http.StatusUnauthorized)
+		sendErrorResponse(w, http.StatusUnauthorized, "Failed to authenticate with Google")
 		return
 	}
 
@@ -135,14 +136,14 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	oauth2Service, err := googleauth.NewService(context.Background(), option.WithTokenSource(config.TokenSource(context.Background(), token)))
 	if err != nil {
 		log.Printf("[Auth] Failed to create OAuth2 service: %v", err)
-		http.Error(w, "Failed to verify Google credentials", http.StatusInternalServerError)
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to verify Google credentials")
 		return
 	}
 
 	userInfo, err := oauth2Service.Userinfo.Get().Do()
 	if err != nil {
 		log.Printf("[Auth] Failed to get user info: %v", err)
-		http.Error(w, "Failed to get user information", http.StatusInternalServerError)
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user information")
 		return
 	}
 
@@ -154,7 +155,7 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 			user, err = h.db.CreateUser(userInfo.Email, "", userInfo.Name)
 			if err != nil {
 				log.Printf("[Auth] Failed to create user: %v", err)
-				http.Error(w, "Failed to create user", http.StatusInternalServerError)
+				sendErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
 				return
 			}
 
@@ -164,103 +165,16 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			log.Printf("[Auth] Database error while checking user: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			sendErrorResponse(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 	}
 
-	// Generate JWT token
-	accessExp := time.Now().Add(5 * time.Minute)
-	jti := uuid.New().String()
-
-	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"exp":  accessExp.Unix(),
-		"jti":  jti,
-		"type": "access",
-	})
-
-	tokenString, err := jwtToken.SignedString(h.jwtSecret)
-	if err != nil {
-		log.Printf("[Auth] Error generating token: %v", err)
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
+	if err := h.GenerateAuthResponse(w, r, user); err != nil {
+		log.Printf("[Auth] Error generating auth response: %v", err)
+		sendErrorResponse(w, http.StatusInternalServerError, "Error processing Google authentication")
 		return
 	}
-
-	// Generate refresh token
-	refreshExp := time.Now().Add(7 * 24 * time.Hour)
-	refreshJti := uuid.New().String()
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"exp":  refreshExp.Unix(),
-		"jti":  refreshJti,
-		"type": "refresh",
-	})
-
-	refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
-	if err != nil {
-		log.Printf("[Auth] Error generating refresh token: %v", err)
-		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Store refresh token with device info
-	userAgent := r.Header.Get("User-Agent")
-	ipAddress := r.Header.Get("X-Forwarded-For")
-	if ipAddress == "" {
-		ipAddress = r.RemoteAddr
-	}
-
-	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
-		log.Printf("[Auth] Error storing refresh token: %v", err)
-		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Set access token in HTTP-only cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    tokenString,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	// Set refresh token in HTTP-only cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshTokenString,
-		Path:     "/auth/refresh",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	// Set CSRF token cookie (not HTTP-only so JS can read it)
-	csrfToken := uuid.New().String()
-	http.SetCookie(w, &http.Cookie{
-		Name:     "csrf_token",
-		Value:    csrfToken,
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	// Send response
-	response := AuthResponse{
-		ID:            user.ID,
-		Name:          user.Name,
-		Email:         user.Email,
-		EmailVerified: user.EmailVerified,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
 }
 
 // Register handles user registration endpoint (POST /auth/register)
@@ -334,205 +248,128 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login handles user authentication endpoint (POST /auth/login)
-// It validates credentials and issues access and refresh tokens
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Email == "" {
-		http.Error(w, "Email is required", http.StatusBadRequest)
+		sendErrorResponse(w, http.StatusBadRequest, "Email is required")
 		return
 	}
 
 	if req.Password == "" {
-		http.Error(w, "Password is required", http.StatusBadRequest)
+		sendErrorResponse(w, http.StatusBadRequest, "Password is required")
 		return
 	}
 
 	user, err := h.db.GetUserByEmail(req.Email)
 	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		sendErrorResponse(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		sendErrorResponse(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
-	// Generate tokens with enhanced security
-	accessExp := time.Now().Add(7 * 24 * time.Hour)
-
-	// Generate JTI (JWT ID) for token tracking
-	jti := uuid.New().String()
-
-	// Create access token with minimal claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"exp":  accessExp.Unix(),
-		"jti":  jti,
-		"type": "access",
-	})
-
-	tokenString, err := token.SignedString(h.jwtSecret)
-	if err != nil {
-		http.Error(w, "Error generating token", http.StatusInternalServerError)
+	if err := h.GenerateAuthResponse(w, r, user); err != nil {
+		log.Printf("[Auth] Error generating auth response: %v", err)
+		sendErrorResponse(w, http.StatusInternalServerError, "Error processing login")
 		return
 	}
+}
 
-	// Generate refresh token with JWT claims
-	refreshExp := time.Now().Add(7 * 24 * time.Hour)
-	refreshJti := uuid.New().String()
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.ID,
-		"exp":  refreshExp.Unix(),
-		"jti":  refreshJti,
-		"type": "refresh",
-	})
+// RefreshToken handles token refresh endpoint (POST /auth/refresh)
+func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshHandler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			sendErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+			return
+		}
 
-	refreshTokenString, err := refreshToken.SignedString(h.jwtRefreshSecret)
-	if err != nil {
-		log.Printf("[Auth] Error generating refresh token: %v", err)
-		http.Error(w, "Error generating refresh token", http.StatusInternalServerError)
-		return
+		// Try to blacklist old access token if present
+		if accessCookie, err := r.Cookie("access_token"); err == nil && accessCookie.Value != "" {
+			if _, err := h.validateAndBlacklistToken(accessCookie.Value); err != nil {
+				log.Printf("[Auth] Error blacklisting old access token: %v", err)
+				// Continue even if blacklisting fails
+			}
+		}
+
+		// Get refresh token from cookie
+		cookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			sendErrorResponse(w, http.StatusUnauthorized, "Refresh token not found")
+			return
+		}
+
+		// Validate CSRF token
+		if err := checkCSRFToken(r); err != nil {
+			log.Printf("[Auth] CSRF validation failed: %v", err)
+			sendErrorResponse(w, http.StatusUnauthorized, "Invalid CSRF token")
+			return
+		}
+
+		// Validate refresh token and get user ID
+		userID, err := h.validateRefreshToken(cookie.Value)
+		if err != nil {
+			log.Printf("[Auth] Refresh token validation failed: %v", err)
+			sendErrorResponse(w, http.StatusUnauthorized, "Invalid refresh token")
+			return
+		}
+
+		// Get user details
+		user, err := h.db.GetUserByID(userID)
+		if err != nil {
+			log.Printf("[Auth] Error fetching user details: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Error fetching user details")
+			return
+		}
+
+		if err := h.GenerateAuthResponse(w, r, user); err != nil {
+			log.Printf("[Auth] Error generating auth response: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Error processing token refresh")
+			return
+		}
 	}
 
-	// Get device info and IP address
-	userAgent := r.Header.Get("User-Agent")
-	ipAddress := r.Header.Get("X-Forwarded-For")
-	if ipAddress == "" {
-		ipAddress = r.RemoteAddr
-	}
-
-	// Store refresh token JTI in database with device info
-	if err := h.db.CreateRefreshToken(user.ID, refreshJti, userAgent, ipAddress, refreshExp); err != nil {
-		log.Printf("[Auth] Error storing refresh token: %v", err)
-		http.Error(w, "Error storing refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Set access token in HTTP-only cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    tokenString,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	// Set refresh token in HTTP-only cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshTokenString,
-		Path:     "/auth/refresh",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	// Set CSRF token cookie (not HTTP-only so JS can read it)
-	csrfToken := uuid.New().String()
-	http.SetCookie(w, &http.Cookie{
-		Name:     "csrf_token",
-		Value:    csrfToken,
-		Path:     "/",
-		HttpOnly: false,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Expires:  refreshExp,
-	})
-
-	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
-	response := AuthResponse{
-		ID:            user.ID,
-		Name:          user.Name,
-		Email:         user.Email,
-		EmailVerified: user.EmailVerified,
-	}
-
-	log.Printf("[Auth] Login response: %+v", response)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	// Apply rate limiting - 3 attempts per 5 minutes
+	handler := createRateLimitedHandler(5*time.Minute, 3, refreshHandler)
+	handler(w, r)
 }
 
 // Logout handles user logout by blacklisting the current token and invalidating refresh tokens
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Get access token from HTTP-only cookie
+	// Get access token from cookie
 	accessCookie, err := r.Cookie("access_token")
 	if err != nil {
-		log.Printf("[Auth] No access token cookie found: %v", err)
-		http.Error(w, "Access token not found", http.StatusUnauthorized)
+		sendErrorResponse(w, http.StatusUnauthorized, "Access token not found")
 		return
 	}
 
-	tokenString := accessCookie.Value
-
-	// Validate the token
-	token, err := h.validateToken(tokenString)
+	// Validate and blacklist token
+	token, err := h.validateAndBlacklistToken(accessCookie.Value)
 	if err != nil {
-		log.Printf("[Auth] Error validating token during logout: %v", err)
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		sendErrorResponse(w, http.StatusUnauthorized, "Invalid token")
 		return
 	}
 
-	// Extract claims and blacklist token
+	// Extract user ID and invalidate refresh tokens
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		userID := claims["sub"].(string)
-		jti := claims["jti"].(string)
-		exp := int64(claims["exp"].(float64))
-
-		// Add token to blacklist
-		if err := h.db.AddToBlacklist(jti, userID, time.Unix(exp, 0)); err != nil {
-			log.Printf("[Auth] Error blacklisting token: %v", err)
-			http.Error(w, "Error processing logout", http.StatusInternalServerError)
-			return
-		}
-
-		// Invalidate all refresh tokens for the user
 		if err := h.db.DeleteAllUserRefreshTokens(userID); err != nil {
 			log.Printf("[Auth] Error invalidating refresh tokens: %v", err)
 		}
-
-		// Clear all auth cookies
-		http.SetCookie(w, &http.Cookie{
-			Name:     "access_token",
-			Value:    "",
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			Expires:  time.Now().Add(-1 * time.Hour),
-		})
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    "",
-			Path:     "/api/auth",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			Expires:  time.Now().Add(-1 * time.Hour),
-		})
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "csrf_token",
-			Value:    "",
-			Path:     "/",
-			HttpOnly: false,
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			Expires:  time.Now().Add(-1 * time.Hour),
-		})
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Successfully logged out"})
+	// Clear cookies
+	h.clearAuthCookies(w)
+
+	// Send success response
+	sendSuccessResponse(w, "Successfully logged out")
 }
 
 // RequestPasswordReset handles password reset request endpoint (POST /auth/reset-password/request)
