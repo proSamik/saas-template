@@ -163,6 +163,12 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 			if err := h.db.UpdateUserFields(user.ID, true, "google"); err != nil {
 				log.Printf("[Auth] Failed to update user fields: %v", err)
 			}
+
+			// Track user signup with Plunk for new users
+			if err := trackUserSignup(user.Email, user.Name); err != nil {
+				log.Printf("[Auth] Error tracking user signup: %v", err)
+				// Continue even if tracking fails
+			}
 		} else {
 			log.Printf("[Auth] Database error while checking user: %v", err)
 			sendErrorResponse(w, http.StatusInternalServerError, "Internal server error")
@@ -237,6 +243,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Update additional user fields (email not verified, provider is local)
 	if err := h.db.UpdateUserFields(user.ID, false, "local"); err != nil {
 		log.Printf("[Auth] Error updating user fields: %v", err)
+	}
+
+	// Track user signup with Plunk
+	if err := trackUserSignup(user.Email, user.Name); err != nil {
+		log.Printf("[Auth] Error tracking user signup: %v", err)
+		// Continue even if tracking fails
 	}
 
 	// Send success response
