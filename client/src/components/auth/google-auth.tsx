@@ -27,7 +27,8 @@ export function GoogleAuth() {
               setAuth({
                 id: authResponse.id,
                 name: authResponse.name,
-                email: authResponse.email
+                email: authResponse.email,
+                emailVerified: authResponse.email_verified
               })
               router.push('/profile')
               toast.success('Logged in with Google successfully!')
