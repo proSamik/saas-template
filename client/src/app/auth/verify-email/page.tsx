@@ -1,70 +1,167 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/auth';
+
+type VerificationStatus = 'idle' | 'verifying' | 'success' | 'error';
+
+interface VerificationState {
+  status: VerificationStatus;
+  error: string | null;
+  isAlreadyVerified: boolean;
+}
 
 export default function VerifyEmail() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
-  const [message, setMessage] = useState('Verifying your email...');
+  const { auth, setAuth } = useAuth();
+  const [state, setState] = useState<VerificationState>({
+    status: 'idle',
+    error: null,
+    isAlreadyVerified: false
+  });
+  
+  // Moved the declaration of hasAttemptedRef and navigationTimeoutRef to the state object
+  const [hasAttemptedRef] = useState(useRef(false));
+  const [navigationTimeoutRef] = useState(useRef<NodeJS.Timeout | null>(null)); 
 
+  // Cleanup function for navigation timeout
+  useEffect(() => {
+    return () => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle successful verification and navigation
+  useEffect(() => {
+    if (state.status === 'success') {
+      const currentAuth = auth;
+      
+      // Clear any existing navigation timeout
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+
+      try {
+        if (currentAuth) {
+          setAuth({ ...currentAuth, emailVerified: true });
+          toast.success(
+            state.isAlreadyVerified 
+              ? 'Your email is already verified!' 
+              : 'Email verified successfully!'
+          );
+          navigationTimeoutRef.current = setTimeout(() => {
+            router.replace('/profile');
+          }, 1500);
+        } else {
+          toast.success('Email verified successfully! Please log in.');
+          navigationTimeoutRef.current = setTimeout(() => {
+            router.replace('/auth');
+          }, 1500);
+        }
+      } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to immediate navigation if timeout fails
+        router.replace(currentAuth ? '/profile' : '/auth');
+      }
+    }
+  }, [state.status]);
+
+  // Handle verification process
   useEffect(() => {
     const token = searchParams.get('token');
+    
     if (!token) {
-      setStatus('error');
-      setMessage('Invalid verification link');
+      setState({
+        status: 'error',
+        error: 'Verification token is missing. Please check your verification link.',
+        isAlreadyVerified: false
+      });
       return;
     }
 
-    const verify = async () => {
+    const verifyEmail = async () => {
+      if (hasAttemptedRef.current) {
+        return;
+      }
+      hasAttemptedRef.current = true;
+      
+      setState(prev => ({ ...prev, status: 'verifying', error: null }));
+
       try {
         await authService.verifyEmail(token);
-        setStatus('success');
-        setMessage('Email verified successfully!');
-        router.push('/profile');
-      } catch (error) {
-        setStatus('error');
-        setMessage('Failed to verify email. The link may be expired or invalid.');
+        setState(prev => ({ 
+          ...prev,
+          status: 'success',
+          error: null,
+          isAlreadyVerified: false
+        }));
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error 
+          ? err.message
+          : 'An unexpected error occurred during verification';
+        
+        if (errorMessage.includes('already used')) {
+          setState(prev => ({ 
+            ...prev,
+            status: 'success',
+            error: null,
+            isAlreadyVerified: true
+          }));
+          return;
+        }
+
+        setState(prev => ({
+          ...prev,
+          status: 'error',
+          error: errorMessage,
+          isAlreadyVerified: false
+        }));
+        toast.error(errorMessage);
       }
     };
 
-    verify();
-  }, [searchParams, router]);
+    verifyEmail();
+  }, [searchParams]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Email Verification
-          </h2>
-          <div className="mt-4">
-            {status === 'verifying' && (
-              <div className="animate-pulse">
-                <div className="text-lg text-gray-600">{message}</div>
-              </div>
-            )}
-            {status === 'success' && (
-              <div className="text-green-600">
-                <div className="text-lg">{message}</div>
-                <p className="mt-2 text-sm">Redirecting to your profile...</p>
-              </div>
-            )}
-            {status === 'error' && (
-              <div className="text-red-600">
-                <div className="text-lg">{message}</div>
-                <button
-                  onClick={() => router.push('/profile')}
-                  className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  Go to Profile
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="max-w-md w-full text-center">
+        {state.status === 'verifying' && (
+          <>
+            <h2 className="text-2xl font-semibold mb-4">Verifying Your Email</h2>
+            <p className="text-gray-600 mb-4">Please wait while we verify your email address...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          </>
+        )}
+
+        {state.status === 'success' && (
+          <>
+            <h2 className="text-2xl font-semibold mb-4 text-green-600">
+              {state.isAlreadyVerified ? 'Email Already Verified' : 'Email Verified!'}
+            </h2>
+            <p className="text-gray-600">
+              {auth 
+                ? 'Redirecting you to your profile...'
+                : 'Redirecting you to login...'}
+            </p>
+          </>
+        )}
+
+        {state.status === 'error' && (
+          <>
+            <h2 className="text-2xl font-semibold mb-4 text-red-600">Verification Failed</h2>
+            <p className="text-gray-600 mb-4">{state.error}</p>
+            <p className="text-gray-600 mt-4">
+              If you continue to have issues, please request a new verification email from your profile settings.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
