@@ -6,6 +6,7 @@ interface AuthState {
   id: string
   name: string
   email: string
+  emailVerified: boolean
 }
 
 interface AuthContextType {
