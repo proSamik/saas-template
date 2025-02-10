@@ -41,7 +41,7 @@ func New(dataSourceName string) (*DB, error) {
 }
 
 // CreateUser creates a new user in the database with the given details
-func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
+func (db *DB) CreateUser(email, password, name string, emailVerified bool) (*models.User, error) {
 	// Check if user already exists
 	exists, err := db.UserExists(email)
 	if err != nil {
@@ -55,9 +55,9 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 	now := time.Now()
 
 	query := `
-		INSERT INTO users (id, email, password, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, email, password, name, created_at, updated_at`
+		INSERT INTO users (id, email, password, name, email_verified, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, email, password, name, email_verified, created_at, updated_at`
 
 	var user models.User
 	err = db.QueryRow(
@@ -66,6 +66,7 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 		email,
 		password,
 		name,
+		emailVerified,
 		now,
 		now,
 	).Scan(
@@ -73,6 +74,7 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.Name,
+		&user.EmailVerified,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -341,37 +343,6 @@ func (db *DB) UpdatePassword(id, hashedPassword string) error {
 		WHERE id = $1`
 
 	result, err := db.Exec(query, parsedID, hashedPassword)
-	if err != nil {
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
-}
-
-// UpdateUserFields updates the provider fields for a user
-func (db *DB) UpdateUserFields(id string, emailVerified bool, provider string) error {
-	// Since email_verified is not in our schema, we'll ignore it
-	parsedID, err := uuid.Parse(id)
-	if err != nil {
-		return err
-	}
-
-	// We'll only update the timestamp since we don't have provider column either
-	query := `
-		UPDATE users
-		SET updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1`
-
-	result, err := db.Exec(query, parsedID)
 	if err != nil {
 		return err
 	}
