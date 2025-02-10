@@ -46,4 +46,6 @@ type DBInterface interface {
 	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error
+	StoreEmailVerificationToken(token, userID, email string, expiresAt time.Time) error
+	VerifyEmail(token string) error
 }
