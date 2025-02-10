@@ -13,6 +13,7 @@ type User struct {
 	Email             string     `json:"email"`
 	Password          string     `json:"-"`
 	Name              string     `json:"name"`
+	EmailVerified     bool       `json:"email_verified"`
 	LatestStatus      string     `json:"latest_status"`
 	LatestProductID   int        `json:"latest_product_id"`
 	LatestVariantID   int        `json:"latest_variant_id"`
