@@ -10,10 +10,9 @@ type DBInterface interface {
 	// User operations
 	GetUserByEmail(email string) (*models.User, error)
 	GetUserByID(id string) (*models.User, error)
-	CreateUser(email, password, name string) (*models.User, error)
+	CreateUser(email, password, name string, emailVerified bool) (*models.User, error)
 	UpdateUser(id, name, email string) error
 	UpdatePassword(id, hashedPassword string) error
-	UpdateUserFields(id string, emailVerified bool, provider string) error
 	UserExists(email string) (bool, error)
 	GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error)
 
