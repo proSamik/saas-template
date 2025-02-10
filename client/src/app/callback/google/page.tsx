@@ -38,7 +38,8 @@ export default function GoogleCallback() {
           setAuth({
             id: authResponse.id,
             name: authResponse.name,
-            email: authResponse.email
+            email: authResponse.email,
+            emailVerified: authResponse.email_verified
           })
 
           router.push('/profile')
