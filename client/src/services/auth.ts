@@ -6,6 +6,7 @@ export interface AuthResponse {
   id: string;
   name: string;
   email: string;
+  email_verified: boolean;
 }
 
 export interface VerifyUserResponse {
@@ -205,9 +206,19 @@ export const authService = {
   },
 
   async verifyEmail(token: string): Promise<void> {
-    console.log('[Auth] Verifying email with token...');
-    await api.get(`/auth/verify?token=${encodeURIComponent(token)}`);
-    console.log('[Auth] Email verification successful');
+    console.log('[Auth] Verifying email with token:', token);
+    try {
+      const response = await api.post('/auth/verify', { token });
+      console.log('[Auth] Email verification response:', response.data);
+      console.log('[Auth] Email verification successful');
+    } catch (error: any) {
+      console.error('[Auth] Email verification failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        error: error.message
+      });
+      throw error;
+    }
   },
 
   async sendVerificationEmail(): Promise<void> {
