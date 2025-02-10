@@ -503,3 +503,64 @@ func (db *DB) CleanupExpiredBlacklistedTokens() error {
 	_, err := db.Exec(query)
 	return err
 }
+
+// StoreEmailVerificationToken stores a new email verification token
+func (db *DB) StoreEmailVerificationToken(token, userID, email string, expiresAt time.Time) error {
+	query := `
+		INSERT INTO email_verification_tokens (token, user_id, email, expires_at)
+		VALUES ($1, $2, $3, $4)
+	`
+	_, err := db.Exec(query, token, userID, email, expiresAt)
+	return err
+}
+
+// VerifyEmail verifies the email using the token and updates the user's email_verified status
+func (db *DB) VerifyEmail(token string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Get token details and verify it hasn't expired or been used
+	var userID string
+	var expiresAt time.Time
+	query := `
+		SELECT user_id, expires_at
+		FROM email_verification_tokens
+		WHERE token = $1 AND used_at IS NULL
+	`
+	err = tx.QueryRow(query, token).Scan(&userID, &expiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("invalid or expired token")
+		}
+		return err
+	}
+
+	if time.Now().After(expiresAt) {
+		return fmt.Errorf("token has expired")
+	}
+
+	// Mark token as used
+	_, err = tx.Exec(`
+		UPDATE email_verification_tokens
+		SET used_at = CURRENT_TIMESTAMP
+		WHERE token = $1
+	`, token)
+	if err != nil {
+		return err
+	}
+
+	// Update user's email_verified status
+	_, err = tx.Exec(`
+		UPDATE users
+		SET email_verified = true
+		WHERE id = $1
+	`, userID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
