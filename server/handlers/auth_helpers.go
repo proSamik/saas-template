@@ -2,10 +2,12 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
 
@@ -399,5 +401,57 @@ func (h *AuthHandler) GenerateAuthResponse(w http.ResponseWriter, r *http.Reques
 
 	// Send response
 	h.sendAuthResponse(w, user)
+	return nil
+}
+
+// Track user signup with Plunk
+func trackUserSignup(email string, name string) error {
+	plunkAPIKey := os.Getenv("PLUNK_SECRET_API_KEY")
+	if plunkAPIKey == "" {
+		return fmt.Errorf("PLUNK_SECRET_API_KEY not set")
+	}
+
+	type UserData struct {
+		Name string `json:"name"`
+	}
+
+	type TrackRequest struct {
+		Event string   `json:"event"`
+		Email string   `json:"email"`
+		Data  UserData `json:"data"`
+	}
+
+	trackReq := TrackRequest{
+		Event: "user-signup",
+		Email: email,
+		Data: UserData{
+			Name: name,
+		},
+	}
+
+	jsonData, err := json.Marshal(trackReq)
+	if err != nil {
+		return fmt.Errorf("error marshaling track request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://api.useplunk.com/v1/track", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+plunkAPIKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error tracking signup: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error response from Plunk API: %d", resp.StatusCode)
+	}
+
 	return nil
 }
