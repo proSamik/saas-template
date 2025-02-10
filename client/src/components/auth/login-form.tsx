@@ -39,7 +39,8 @@ export function LoginForm({ onSignUpClick, onForgotPasswordClick }: LoginFormPro
       setAuth({
         id: response.id,
         name: response.name,
-        email: response.email
+        email: response.email,
+        emailVerified: response.email_verified
       })
       router.push('/profile')
       toast.success('Logged in successfully!')
