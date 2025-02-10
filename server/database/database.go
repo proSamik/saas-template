@@ -86,7 +86,7 @@ func (db *DB) CreateUser(email, password, name string) (*models.User, error) {
 func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, email, password, name, created_at, updated_at
+		SELECT id, email, password, name, email_verified, created_at, updated_at
 		FROM users
 		WHERE email = $1`
 
@@ -95,6 +95,7 @@ func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.Name,
+		&user.EmailVerified,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -142,8 +143,14 @@ func (db *DB) InvalidateRefreshTokensForUser(userID string) error {
 // GetUserByID retrieves all user details by their unique identifier
 func (db *DB) GetUserByID(id string) (*models.User, error) {
 	var user models.User
+	var latestStatus sql.NullString
+	var latestProductID sql.NullInt64
+	var latestVariantID sql.NullInt64
+	var latestRenewalDate sql.NullTime
+	var latestEndDate sql.NullTime
+
 	query := `
-		SELECT id, email, password, name, 
+		SELECT id, email, password, name, email_verified,
 			latest_status, latest_product_id, latest_variant_id,
 			latest_renewal_date, latest_end_date,
 			created_at, updated_at
@@ -155,17 +162,37 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 		&user.Email,
 		&user.Password,
 		&user.Name,
-		&user.LatestStatus,
-		&user.LatestProductID,
-		&user.LatestVariantID,
-		&user.LatestRenewalDate,
-		&user.LatestEndDate,
+		&user.EmailVerified,
+		&latestStatus,
+		&latestProductID,
+		&latestVariantID,
+		&latestRenewalDate,
+		&latestEndDate,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Convert NULL values to their appropriate types
+	if latestStatus.Valid {
+		user.LatestStatus = latestStatus.String
+	}
+	if latestProductID.Valid {
+		user.LatestProductID = int(latestProductID.Int64)
+	}
+	if latestVariantID.Valid {
+		user.LatestVariantID = int(latestVariantID.Int64)
+	}
+	if latestRenewalDate.Valid {
+		t := latestRenewalDate.Time
+		user.LatestRenewalDate = &t
+	}
+	if latestEndDate.Valid {
+		t := latestEndDate.Time
+		user.LatestEndDate = &t
 	}
 
 	return &user, nil
@@ -518,27 +545,60 @@ func (db *DB) StoreEmailVerificationToken(token, userID, email string, expiresAt
 func (db *DB) VerifyEmail(token string) error {
 	tx, err := db.Begin()
 	if err != nil {
+		log.Printf("[DB] Failed to begin transaction: %v", err)
 		return err
 	}
 	defer tx.Rollback()
 
-	// Get token details and verify it hasn't expired or been used
+	// First, let's check if the token exists at all
+	var exists bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM email_verification_tokens WHERE token = $1)`
+	err = tx.QueryRow(checkQuery, token).Scan(&exists)
+	if err != nil {
+		log.Printf("[DB] Error checking token existence: %v", err)
+		return err
+	}
+
+	if !exists {
+		log.Printf("[DB] Token does not exist: %s", token)
+		return fmt.Errorf("invalid or expired token")
+	}
+
+	// Now check the token's status and get user info
 	var userID string
 	var expiresAt time.Time
+	var usedAt sql.NullTime
+	var emailVerified bool
 	query := `
-		SELECT user_id, expires_at
-		FROM email_verification_tokens
-		WHERE token = $1 AND used_at IS NULL
+		SELECT evt.user_id, evt.expires_at, evt.used_at, u.email_verified
+		FROM email_verification_tokens evt
+		JOIN users u ON u.id = evt.user_id
+		WHERE evt.token = $1
 	`
-	err = tx.QueryRow(query, token).Scan(&userID, &expiresAt)
+	err = tx.QueryRow(query, token).Scan(&userID, &expiresAt, &usedAt, &emailVerified)
 	if err != nil {
+		log.Printf("[DB] Error querying token details: %v", err)
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("invalid or expired token")
 		}
 		return err
 	}
 
+	log.Printf("[DB] Token found - UserID: %s, ExpiresAt: %v, UsedAt: %v, EmailVerified: %v", userID, expiresAt, usedAt, emailVerified)
+
+	// If email is already verified, return success
+	if emailVerified {
+		log.Printf("[DB] Email already verified for user: %s", userID)
+		return nil
+	}
+
+	if usedAt.Valid {
+		log.Printf("[DB] Token already used at: %v", usedAt.Time)
+		return fmt.Errorf("token already used")
+	}
+
 	if time.Now().After(expiresAt) {
+		log.Printf("[DB] Token expired at: %v", expiresAt)
 		return fmt.Errorf("token has expired")
 	}
 
@@ -549,18 +609,31 @@ func (db *DB) VerifyEmail(token string) error {
 		WHERE token = $1
 	`, token)
 	if err != nil {
+		log.Printf("[DB] Failed to mark token as used: %v", err)
 		return err
 	}
 
 	// Update user's email_verified status
-	_, err = tx.Exec(`
+	result, err := tx.Exec(`
 		UPDATE users
 		SET email_verified = true
 		WHERE id = $1
 	`, userID)
 	if err != nil {
+		log.Printf("[DB] Failed to update user email_verified status: %v", err)
 		return err
 	}
 
+	rows, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[DB] Error checking affected rows: %v", err)
+		return err
+	}
+	if rows == 0 {
+		log.Printf("[DB] No user found with ID: %s", userID)
+		return fmt.Errorf("user not found")
+	}
+
+	log.Printf("[DB] Successfully verified email for user: %s", userID)
 	return tx.Commit()
 }
