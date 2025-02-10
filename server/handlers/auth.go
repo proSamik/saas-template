@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -34,6 +35,9 @@ type AuthHandler struct {
 	googleClientID     string
 	googleClientSecret string
 	googleRedirectURL  string
+	githubClientID     string
+	githubClientSecret string
+	githubRedirectURL  string
 }
 
 // AuthResponse represents the response body for successful authentication operations
@@ -87,6 +91,11 @@ var (
 	cacheExpiry       = 5 * time.Minute
 )
 
+// GithubAuthRequest represents the request body for GitHub OAuth authentication
+type GithubAuthRequest struct {
+	Code string `json:"code"` // Authorization code from GitHub OAuth
+}
+
 // NewAuthHandler creates a new AuthHandler instance with the given database connection and JWT secret
 func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
 	// Create rate limiter for auth endpoints - 5 attempts per minute
@@ -100,6 +109,9 @@ func NewAuthHandler(db database.DBInterface, jwtSecret string) *AuthHandler {
 		googleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		googleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		googleRedirectURL:  os.Getenv("GOOGLE_REDIRECT_URL"),
+		githubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		githubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		githubRedirectURL:  os.Getenv("GITHUB_REDIRECT_URL"),
 	}
 }
 
@@ -152,16 +164,11 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == database.ErrNotFound || err.Error() == "sql: no rows in result set" {
 			// Create new user with Google provider and verified email
-			user, err = h.db.CreateUser(userInfo.Email, "", userInfo.Name)
+			user, err = h.db.CreateUser(userInfo.Email, "", userInfo.Name, true)
 			if err != nil {
 				log.Printf("[Auth] Failed to create user: %v", err)
 				sendErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
 				return
-			}
-
-			// Update additional user fields
-			if err := h.db.UpdateUserFields(user.ID, true, "google"); err != nil {
-				log.Printf("[Auth] Failed to update user fields: %v", err)
 			}
 
 			// Track user signup with Plunk for new users
@@ -228,21 +235,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("[Auth] Error hashing password: %v", err)
-		http.Error(w, "Error processing registration", http.StatusInternalServerError)
-		return
-	}
-
-	// Create new user
-	user, err := h.db.CreateUser(req.Email, string(hashedPassword), req.Name)
-	if err != nil {
-		log.Printf("[Auth] Error creating user: %v", err)
 		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
-	// Update additional user fields (email not verified, provider is local)
-	if err := h.db.UpdateUserFields(user.ID, false, "local"); err != nil {
-		log.Printf("[Auth] Error updating user fields: %v", err)
+	// Create new user with email_verified set to false for regular registration
+	user, err := h.db.CreateUser(req.Email, string(hashedPassword), req.Name, false)
+	if err != nil {
+		log.Printf("[Auth] Error creating user: %v", err)
+		http.Error(w, "Error creating user", http.StatusInternalServerError)
+		return
 	}
 
 	// Track user signup with Plunk
@@ -620,5 +622,168 @@ func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
 	case <-time.After(5 * time.Second):
 		log.Printf("[Auth] Timeout getting subscription status for user: %s", userID)
 		http.Error(w, "Request timeout", http.StatusGatewayTimeout)
+	}
+}
+
+func (h *AuthHandler) GithubAuth(w http.ResponseWriter, r *http.Request) {
+	var req GithubAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Auth] Error decoding request body: %v", err)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Initialize OAuth2 config
+	config := &goauth.Config{
+		ClientID:     h.githubClientID,
+		ClientSecret: h.githubClientSecret,
+		RedirectURL:  h.githubRedirectURL,
+		Scopes: []string{
+			"read:user",
+			"user:email",
+		},
+		Endpoint: goauth.Endpoint{
+			AuthURL:  "https://github.com/login/oauth/authorize",
+			TokenURL: "https://github.com/login/oauth/access_token",
+		},
+	}
+
+	// Exchange authorization code for token
+	token, err := config.Exchange(context.Background(), req.Code)
+	if err != nil {
+		log.Printf("[Auth] Failed to exchange auth code: %v", err)
+		sendErrorResponse(w, http.StatusUnauthorized, "Failed to authenticate with GitHub")
+		return
+	}
+
+	// Get user info from GitHub API
+	client := &http.Client{}
+	userReq, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+	if err != nil {
+		log.Printf("[Auth] Failed to create GitHub API request: %v", err)
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user information")
+		return
+	}
+	userReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	userReq.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(userReq)
+	if err != nil {
+		log.Printf("[Auth] Failed to get user info from GitHub: %v", err)
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user information")
+		return
+	}
+	defer resp.Body.Close()
+
+	var githubUser struct {
+		ID    int    `json:"id"`
+		Login string `json:"login"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&githubUser); err != nil {
+		log.Printf("[Auth] Failed to decode GitHub user info: %v", err)
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user information")
+		return
+	}
+
+	// If email is not public, fetch user's primary email
+	if githubUser.Email == "" {
+		emailReq, err := http.NewRequest("GET", "https://api.github.com/user/emails", nil)
+		if err != nil {
+			log.Printf("[Auth] Failed to create GitHub emails request: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user email")
+			return
+		}
+		emailReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		emailReq.Header.Set("Accept", "application/json")
+
+		emailResp, err := client.Do(emailReq)
+		if err != nil {
+			log.Printf("[Auth] Failed to get user emails from GitHub: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user email")
+			return
+		}
+		defer emailResp.Body.Close()
+
+		// Read the response body for debugging
+		body, err := io.ReadAll(emailResp.Body)
+		if err != nil {
+			log.Printf("[Auth] Failed to read email response body: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user email")
+			return
+		}
+		log.Printf("[Auth] GitHub email response: %s", string(body))
+
+		// Parse the email response
+		var emailsResponse []struct {
+			Email      string      `json:"email"`
+			Primary    bool        `json:"primary"`
+			Verified   bool        `json:"verified"`
+			Visibility interface{} `json:"visibility"`
+		}
+
+		if err := json.Unmarshal(body, &emailsResponse); err != nil {
+			log.Printf("[Auth] Failed to decode GitHub emails: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Failed to get user email")
+			return
+		}
+
+		// Find primary email
+		for _, email := range emailsResponse {
+			if email.Primary && email.Verified {
+				githubUser.Email = email.Email
+				break
+			}
+		}
+
+		if githubUser.Email == "" {
+			log.Printf("[Auth] No primary email found for GitHub user")
+			sendErrorResponse(w, http.StatusInternalServerError, "No valid email found")
+			return
+		}
+	}
+
+	// Use login as name if name is not set
+	if githubUser.Name == "" {
+		githubUser.Name = githubUser.Login
+	}
+
+	// Verify the user exists or create a new one
+	user, err := h.db.GetUserByEmail(githubUser.Email)
+	if err != nil {
+		if err == database.ErrNotFound || err.Error() == "sql: no rows in result set" {
+
+			// Create new user with email_verified set to true for GitHub auth
+			user, err = h.db.CreateUser(githubUser.Email, "", githubUser.Name, true)
+			if err != nil {
+				log.Printf("[Auth] Failed to create user: %v", err)
+				sendErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
+				return
+			}
+
+			// Track user signup with Plunk for new users
+			if err := trackUserSignup(user.Email, user.Name); err != nil {
+				log.Printf("[Auth] Error tracking user signup: %v", err)
+				// Continue even if tracking fails
+			}
+		} else {
+			log.Printf("[Auth] Database error while checking user: %v", err)
+			sendErrorResponse(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+	} else {
+		log.Printf("[Auth] Found existing user with ID: %s, Email: %s", user.ID, user.Email)
+	}
+
+	// Log the final user state before generating response
+	log.Printf("[Auth] Final user state - ID: %s, Email: %s, Name: %s, EmailVerified: %v",
+		user.ID, user.Email, user.Name, user.EmailVerified)
+
+	if err := h.GenerateAuthResponse(w, r, user); err != nil {
+		log.Printf("[Auth] Error generating auth response: %v", err)
+		sendErrorResponse(w, http.StatusInternalServerError, "Error processing GitHub authentication")
+		return
 	}
 }
