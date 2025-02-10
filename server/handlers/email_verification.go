@@ -160,44 +160,40 @@ func (h *AuthHandler) SendVerificationEmail(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
-	var token string
+	log.Printf("[Email Verification] Request received - Method: %s", r.Method)
 
-	switch r.Method {
-	case http.MethodGet:
-		// Get token from query parameters
-		token = r.URL.Query().Get("token")
-		if token == "" {
-			http.Error(w, "Missing verification token", http.StatusBadRequest)
-			return
-		}
-	case http.MethodPost:
-		// Get token from request body
-		var req struct {
-			Token string `json:"token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-		token = req.Token
-	default:
+	if r.Method != http.MethodPost {
+		log.Printf("[Email Verification] Invalid method: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if token == "" {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[Email Verification] Failed to decode request body: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[Email Verification] Processing token: %s", req.Token)
+
+	if req.Token == "" {
+		log.Printf("[Email Verification] Empty token received")
 		http.Error(w, "Missing verification token", http.StatusBadRequest)
 		return
 	}
 
 	// Verify token and update user's email verification status
-	err := h.db.VerifyEmail(token)
+	err := h.db.VerifyEmail(req.Token)
 	if err != nil {
-		log.Printf("Error verifying email: %v", err)
+		log.Printf("[Email Verification] Token verification failed: %v", err)
 		http.Error(w, "Invalid or expired verification token", http.StatusBadRequest)
 		return
 	}
 
+	log.Printf("[Email Verification] Email verified successfully for token: %s", req.Token)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Email verified successfully",
