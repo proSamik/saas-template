@@ -204,6 +204,30 @@ export const authService = {
     return response.data;
   },
 
+  async verifyEmail(token: string): Promise<void> {
+    console.log('[Auth] Verifying email with token...');
+    await api.get(`/auth/verify?token=${encodeURIComponent(token)}`);
+    console.log('[Auth] Email verification successful');
+  },
+
+  async sendVerificationEmail(): Promise<void> {
+    console.log('[Auth] Sending verification email...');
+    // Get CSRF token from cookie
+    const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+    
+    if (!csrfToken) {
+      console.log('[Auth] No CSRF token found');
+      throw new Error('No CSRF token found');
+    }
+    
+    await api.post('/auth/verify-email', {}, {
+      headers: {
+        'X-CSRF-Token': csrfToken
+      }
+    });
+    console.log('[Auth] Verification email sent successfully');
+  },
+
   async get<T = any>(url: string): Promise<T> {
     console.log(`[Auth] Sending GET request to ${url}`);
     const response = await api.get<T>(url);
