@@ -69,8 +69,10 @@ func main() {
 	mux.HandleFunc("/auth/reset-password/request", authHandler.RequestPasswordReset)
 	mux.HandleFunc("/auth/reset-password", authHandler.ResetPassword)
 	mux.HandleFunc("/auth/refresh", authHandler.RefreshToken)
+	mux.HandleFunc("/auth/verify", authHandler.VerifyEmail)
 
 	// Auth Routes (protected)
+	mux.Handle("/auth/verify-email", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.SendVerificationEmail)))
 	mux.Handle("/auth/logout", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.Logout)))
 	mux.Handle("/auth/account-password/reset", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.AccountPasswordReset)))
 
