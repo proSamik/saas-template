@@ -66,6 +66,7 @@ func main() {
 	mux.HandleFunc("/auth/register", authHandler.Register)
 	mux.HandleFunc("/auth/login", authHandler.Login)
 	mux.HandleFunc("/auth/google", authHandler.GoogleAuth)
+	mux.HandleFunc("/auth/github", authHandler.GithubAuth)
 	mux.HandleFunc("/auth/reset-password/request", authHandler.RequestPasswordReset)
 	mux.HandleFunc("/auth/reset-password", authHandler.ResetPassword)
 	mux.HandleFunc("/auth/refresh", authHandler.RefreshToken)
