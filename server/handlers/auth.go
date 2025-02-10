@@ -38,9 +38,10 @@ type AuthHandler struct {
 
 // AuthResponse represents the response body for successful authentication operations
 type AuthResponse struct {
-	ID    string `json:"id"`    // User's unique identifier
-	Name  string `json:"name"`  // User's display name
-	Email string `json:"email"` // User's email address
+	ID            string `json:"id"`             // User's unique identifier
+	Name          string `json:"name"`           // User's display name
+	Email         string `json:"email"`          // User's email address
+	EmailVerified bool   `json:"email_verified"` // Whether user's email is verified
 }
 
 // AuthHandler handles authentication-related HTTP requests and manages user sessions
@@ -252,9 +253,10 @@ func (h *AuthHandler) GoogleAuth(w http.ResponseWriter, r *http.Request) {
 
 	// Send response
 	response := AuthResponse{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
+		ID:            user.ID,
+		Name:          user.Name,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -448,9 +450,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[Auth] Sending response for user: %s (email: %s)", user.ID, user.Email)
 	response := AuthResponse{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
+		ID:            user.ID,
+		Name:          user.Name,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerified,
 	}
 
 	log.Printf("[Auth] Login response: %+v", response)
