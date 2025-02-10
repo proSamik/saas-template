@@ -149,6 +149,11 @@ export const authService = {
     return response.data;
   },
 
+  async githubLogin(code: string): Promise<AuthResponse> {
+    const response = await api.post<AuthResponse>('/auth/github', { code });
+    return response.data;
+  },
+
   async register(credentials: LoginCredentials): Promise<AuthResponse> {
     console.log('[Auth] Sending registration request...');
     const response = await api.post<AuthResponse>('/auth/register', credentials);
