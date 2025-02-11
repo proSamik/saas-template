@@ -136,125 +136,259 @@ api.interceptors.response.use(
   }
 );
 
+// Create a closure for request deduplication
+const createDedupedRequest = () => {
+  const pendingRequests = new Map<string, Promise<any>>();
+  let cleanupTimer: NodeJS.Timeout | null = null;
+
+  const cleanup = () => {
+    pendingRequests.clear();
+    cleanupTimer = null;
+  };
+
+  return {
+    async execute<T>(
+      key: string,
+      requestFn: () => Promise<T>,
+      options: { timeout?: number } = {}
+    ): Promise<T> {
+      const existingRequest = pendingRequests.get(key) as Promise<T>;
+      if (existingRequest) {
+        return existingRequest;
+      }
+
+      const promise = requestFn()
+        .finally(() => {
+          pendingRequests.delete(key);
+          // Set cleanup timer
+          if (!cleanupTimer) {
+            cleanupTimer = setTimeout(cleanup, options.timeout || 1000);
+          }
+        });
+
+      pendingRequests.set(key, promise);
+      return promise;
+    }
+  };
+};
+
+const requestDeduper = createDedupedRequest();
+
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    console.log('[Auth] Sending login request...');
-    const response = await api.post<AuthResponse>('/auth/login', credentials);
-    console.log('[Auth] Login response received');
-    return response.data;
+    const key = `login:${JSON.stringify(credentials)}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending login request...');
+        const response = await api.post<AuthResponse>('/auth/login', credentials);
+        console.log('[Auth] Login response received');
+        return response.data;
+      }
+    );
   },
 
   async googleLogin(code: string): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/google', { code });
-    return response.data;
+    const key = `google:${code}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        const response = await api.post<AuthResponse>('/auth/google', { code });
+        return response.data;
+      }
+    );
   },
 
   async githubLogin(code: string): Promise<AuthResponse> {
-    const response = await api.post<AuthResponse>('/auth/github', { code });
-    return response.data;
+    const key = `github:${code}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        const response = await api.post<AuthResponse>('/auth/github', { code });
+        return response.data;
+      }
+    );
   },
 
   async register(credentials: LoginCredentials): Promise<AuthResponse> {
-    console.log('[Auth] Sending registration request...');
-    const response = await api.post<AuthResponse>('/auth/register', credentials);
-    console.log('[Auth] Registration response received');
-    return response.data;
+    const key = `register:${JSON.stringify(credentials)}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending registration request...');
+        const response = await api.post<AuthResponse>('/auth/register', credentials);
+        console.log('[Auth] Registration response received');
+        return response.data;
+      }
+    );
   },
 
   async logout(): Promise<void> {
-    console.log('[Auth] Sending logout request...');
-    await api.post('/auth/logout');
-    console.log('[Auth] Logout successful');
+    const key = 'logout';
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending logout request...');
+        await api.post('/auth/logout');
+        console.log('[Auth] Logout successful');
+      }
+    );
   },
 
   async forgotPassword(email: string): Promise<void> {
-    console.log('[Auth] Sending forgot password request...');
-    await api.post('/auth/reset-password/request', { email });
-    console.log('[Auth] Forgot password request successful');
+    const key = `forgotPassword:${email}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending forgot password request...');
+        await api.post('/auth/reset-password/request', { email });
+        console.log('[Auth] Forgot password request successful');
+      }
+    );
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
-    console.log('[Auth] Sending reset password request...');
-    await api.post('/auth/reset-password', { token, password });
-    console.log('[Auth] Password reset successful');
+    const key = `resetPassword:${token}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending reset password request...');
+        await api.post('/auth/reset-password', { token, password });
+        console.log('[Auth] Password reset successful');
+      }
+    );
   },
 
   async AccountPasswordReset(currentPassword: string, newPassword: string): Promise<void> {
-    console.log('[Auth] Sending reset password request...');
-    await api.post('/auth/account-password/reset', { currentPassword, newPassword });
-    console.log('[Auth] Password reset successful');
+    const key = `accountPasswordReset:${currentPassword}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending reset password request...');
+        await api.post('/auth/account-password/reset', { currentPassword, newPassword });
+        console.log('[Auth] Password reset successful');
+      }
+    );
   },
 
   async checkRefreshToken(): Promise<any> {
-    console.log('[Auth] Checking refresh token status...');
-    // Get CSRF token from cookie
-    const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+    const key = 'checkRefreshToken';
     
-    if (!csrfToken) {
-      console.log('[Auth] No CSRF token found');
-      throw new Error('No CSRF token found');
-    }
-    
-    const response = await api.post('/auth/refresh', {}, {
-      headers: {
-        'X-CSRF-Token': csrfToken
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Checking refresh token status...');
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+        
+        if (!csrfToken) {
+          console.log('[Auth] No CSRF token found');
+          throw new Error('No CSRF token found');
+        }
+        
+        const response = await api.post('/auth/refresh', {}, {
+          headers: {
+            'X-CSRF-Token': csrfToken
+          }
+        });
+        return response;
       }
-    });
-    return response;
+    );
   },
 
   async verifyUser(): Promise<VerifyUserResponse> {
-    console.log('[Auth] Verifying user subscription status...');
-    const response = await api.get<VerifyUserResponse>('/user/verify-user');
-    console.log('[Auth] User verification response:', response.data);
-    return response.data;
+    const key = 'verifyUser';
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Verifying user subscription status...');
+        const response = await api.get<VerifyUserResponse>('/user/verify-user');
+        console.log('[Auth] User verification response:', response.data);
+        return response.data;
+      }
+    );
   },
 
   async verifyEmail(token: string): Promise<void> {
-    console.log('[Auth] Verifying email with token:', token);
-    try {
-      const response = await api.post('/auth/verify', { token });
-      console.log('[Auth] Email verification response:', response.data);
-      console.log('[Auth] Email verification successful');
-    } catch (error: any) {
-      console.error('[Auth] Email verification failed:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        error: error.message
-      });
-      throw error;
-    }
+    const key = `verifyEmail:${token}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Verifying email with token:', token);
+        try {
+          const response = await api.post('/auth/verify', { token });
+          console.log('[Auth] Email verification response:', response.data);
+          console.log('[Auth] Email verification successful');
+        } catch (error: any) {
+          console.error('[Auth] Email verification failed:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            error: error.message
+          });
+          throw error;
+        }
+      }
+    );
   },
 
   async sendVerificationEmail(): Promise<void> {
-    console.log('[Auth] Sending verification email...');
-    // Get CSRF token from cookie
-    const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+    const key = 'sendVerificationEmail';
     
-    if (!csrfToken) {
-      console.log('[Auth] No CSRF token found');
-      throw new Error('No CSRF token found');
-    }
-    
-    await api.post('/auth/verify-email', {}, {
-      headers: {
-        'X-CSRF-Token': csrfToken
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log('[Auth] Sending verification email...');
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+        
+        if (!csrfToken) {
+          console.log('[Auth] No CSRF token found');
+          throw new Error('No CSRF token found');
+        }
+        
+        await api.post('/auth/verify-email', {}, {
+          headers: {
+            'X-CSRF-Token': csrfToken
+          }
+        });
+        console.log('[Auth] Verification email sent successfully');
       }
-    });
-    console.log('[Auth] Verification email sent successfully');
+    );
   },
 
   async get<T = any>(url: string): Promise<T> {
-    console.log(`[Auth] Sending GET request to ${url}`);
-    const response = await api.get<T>(url);
-    console.log(`[Auth] GET response received from ${url}`);
-    return response.data;
+    const key = `get:${url}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log(`[Auth] Sending GET request to ${url}`);
+        const response = await api.get<T>(url);
+        console.log(`[Auth] GET response received from ${url}`);
+        return response.data;
+      }
+    );
   },
 
   async post(url: string, data: any) {
-    console.log(`[Auth] Sending POST request to ${url}`);
-    const response = await api.post(url, data);
-    console.log(`[Auth] POST response received from ${url}`);
-    return response;
+    const key = `post:${url}:${JSON.stringify(data)}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log(`[Auth] Sending POST request to ${url}`);
+        const response = await api.post(url, data);
+        console.log(`[Auth] POST response received from ${url}`);
+        return response;
+      }
+    );
   }
 };
