@@ -6,8 +6,21 @@ export interface User {
   email: string;
   name: string;
   email_verified: boolean;
+  latest_status: string | null;
+  latest_product_id: number | null;
+  latest_variant_id: number | null;
+  latest_subscription_id: number | null;
+  latest_renewal_date: string | null;
+  latest_end_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface GetUsersResponse {
+  users: User[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 const headers = () => ({
@@ -15,16 +28,46 @@ const headers = () => ({
   'Content-Type': 'application/json',
 });
 
-export const getUsers = async (): Promise<User[]> => {
-  const response = await fetch(`${API_URL}/admin/users`, {
+export interface GetUsersParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export const getUsers = async (params: GetUsersParams = {}): Promise<GetUsersResponse> => {
+  const { page = 1, limit = 20, search = '' } = params;
+  const queryParams = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+    ...(search ? { search } : {}),
+  });
+
+  const response = await fetch(`${API_URL}/admin/users?${queryParams}`, {
     headers: headers(),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch users');
+    const error = await response.text();
+    throw new Error(error || 'Failed to fetch users');
   }
 
-  return response.json();
+  const data = await response.json();
+  
+  // Ensure consistent data structure
+  return {
+    users: (data.users || []).map((user: any) => ({
+      ...user,
+      latest_status: user.latest_status || null,
+      latest_product_id: user.latest_product_id || null,
+      latest_variant_id: user.latest_variant_id || null,
+      latest_subscription_id: user.latest_subscription_id || null,
+      latest_renewal_date: user.latest_renewal_date || null,
+      latest_end_date: user.latest_end_date || null,
+    })),
+    total: data.total || 0,
+    page: data.page || 1,
+    limit: data.limit || 20,
+  };
 };
 
 export const getUser = async (userId: string): Promise<User> => {
@@ -33,7 +76,8 @@ export const getUser = async (userId: string): Promise<User> => {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch user');
+    const error = await response.text();
+    throw new Error(error || 'Failed to fetch user');
   }
 
   return response.json();
