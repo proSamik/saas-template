@@ -18,7 +18,7 @@ export const adminLogin = async (credentials: AdminLoginRequest): Promise<AdminL
 
   try {
     isLoggingIn = true;
-    const response = await fetch(`${API_URL}/admin/auth/login`, {
+    const response = await fetch(`${API_URL}/admin/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -27,10 +27,13 @@ export const adminLogin = async (credentials: AdminLoginRequest): Promise<AdminL
     });
 
     if (!response.ok) {
-      throw new Error('Login failed');
+      const error = await response.text();
+      throw new Error(error || 'Login failed');
     }
 
-    return response.json();
+    const data = await response.json();
+    setAuthToken(data.token);
+    return data;
   } finally {
     isLoggingIn = false;
   }
@@ -50,5 +53,14 @@ export const removeAuthToken = (): void => {
 };
 
 export const isAuthenticated = (): boolean => {
-  return !!getAuthToken();
+  const token = getAuthToken();
+  if (!token) return false;
+  
+  // Basic JWT expiration check
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
 }; 
