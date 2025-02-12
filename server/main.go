@@ -58,6 +58,8 @@ func main() {
 	// Initialize handlers and middleware
 	authHandler := handlers.NewAuthHandler(db, os.Getenv("JWT_SECRET"))
 	authMiddleware := middleware.NewAuthMiddleware(db, os.Getenv("JWT_SECRET"))
+	adminHandler := handlers.NewAdminHandler(db)
+	adminMiddleware := middleware.NewAdminMiddleware()
 
 	// Create router
 	mux := http.NewServeMux()
@@ -105,9 +107,19 @@ func main() {
 	analyticsHandler := handlers.NewAnalyticsHandler(db)
 	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
 
+	// Admin routes
+	mux.HandleFunc("/admin/login", adminHandler.Login)
+	mux.Handle("/admin/users", adminMiddleware.RequireAdmin(http.HandlerFunc(adminHandler.GetUsers)))
+
+	// Protected admin routes (example)
+	mux.Handle("/admin/dashboard", adminMiddleware.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message": "Admin dashboard data"}`))
+	})))
+
 	// Configure CORS
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:      []string{"http://localhost:3000", os.Getenv("FRONTEND_URL")}, // Add your frontend URL
+		AllowedOrigins:      []string{"http://localhost:3001", os.Getenv("FRONTEND_URL")}, // Add your frontend URL
 		AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:      []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
 		ExposedHeaders:      []string{"Link"},
