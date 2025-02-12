@@ -16,6 +16,9 @@ type DBInterface interface {
 	UserExists(email string) (bool, error)
 	GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error)
 
+	// Admin operations
+	GetUsers(page int, limit int, search string) ([]models.User, int, error)
+
 	// Token management operations
 	CreateRefreshToken(userID string, tokenHash string, deviceInfo string, ipAddress string, expiresAt time.Time) error
 	GetRefreshToken(tokenHash string) (*models.RefreshToken, error)
