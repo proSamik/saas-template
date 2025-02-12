@@ -9,18 +9,19 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID                string     `json:"id"`
-	Email             string     `json:"email"`
-	Password          string     `json:"-"`
-	Name              string     `json:"name"`
-	EmailVerified     bool       `json:"email_verified"`
-	LatestStatus      string     `json:"latest_status"`
-	LatestProductID   int        `json:"latest_product_id"`
-	LatestVariantID   int        `json:"latest_variant_id"`
-	LatestRenewalDate *time.Time `json:"latest_renewal_date"`
-	LatestEndDate     *time.Time `json:"latest_end_date"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID                   string     `json:"id"`
+	Email                string     `json:"email"`
+	Password             string     `json:"-"`
+	Name                 string     `json:"name"`
+	EmailVerified        bool       `json:"email_verified"`
+	LatestStatus         string     `json:"latest_status"`
+	LatestProductID      int        `json:"latest_product_id,omitempty"`
+	LatestVariantID      int        `json:"latest_variant_id,omitempty"`
+	LatestSubscriptionID int        `json:"latest_subscription_id,omitempty"`
+	LatestRenewalDate    *time.Time `json:"latest_renewal_date,omitempty"`
+	LatestEndDate        *time.Time `json:"latest_end_date,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 // UserSubscriptionStatus represents the subscription status of a user
@@ -43,15 +44,4 @@ func (u *User) HashPassword() error {
 // ComparePassword checks if the provided password matches the hashed password
 func (u *User) ComparePassword(password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
-}
-
-// UserResponse represents the user data that is safe to send to the client
-type UserResponse struct {
-	ID            string    `json:"id"`             // User's ID
-	UserID        string    `json:"user_id"`        // Public user identifier
-	Name          string    `json:"name"`           // User's name
-	Email         string    `json:"email"`          // User's email
-	EmailVerified bool      `json:"email_verified"` // Email verification status
-	Provider      string    `json:"provider"`       // Authentication provider
-	CreatedAt     time.Time `json:"created_at"`     // Account creation timestamp
 }
