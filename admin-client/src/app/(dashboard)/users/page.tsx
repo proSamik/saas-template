@@ -3,11 +3,55 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUsers } from '@/lib/services/users';
-import type { User } from '@/lib/services/users';
+import type { User, GetUsersResponse } from '@/lib/services/users';
 import Loading from '@/components/ui/loading';
 import Error from '@/components/ui/error';
+import ClientOnly from '@/components/client-only';
+import { formatDate } from '@/lib/utils/format';
 
 const ITEMS_PER_PAGE = 10;
+
+const LoadingSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+    <div className="space-y-3">
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="h-4 bg-gray-200 rounded w-full"></div>
+      ))}
+    </div>
+  </div>
+);
+
+const NoData = () => (
+  <span className="text-gray-400 text-sm">No Data</span>
+);
+
+const StatusBadge = ({ status }: { status: string | null }) => {
+  if (!status || status === '') {
+    return (
+      <span className="inline-flex rounded-full px-2 text-xs font-semibold leading-5 bg-gray-100 text-gray-800">
+        Not Subscribed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex rounded-full px-2 text-xs font-semibold leading-5 bg-blue-100 text-blue-800">
+      {status}
+    </span>
+  );
+};
+
+const VerificationBadge = ({ verified }: { verified: boolean }) => (
+  <span
+    className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
+      verified
+        ? 'bg-green-100 text-green-800'
+        : 'bg-yellow-100 text-yellow-800'
+    }`}
+  >
+    {verified ? 'Email Verified' : 'Email Unverified'}
+  </span>
+);
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -17,6 +61,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'verified' | 'unverified'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [sortConfig, setSortConfig] = useState<{
     key: keyof User;
     direction: 'asc' | 'desc';
@@ -26,19 +71,26 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [currentPage, search]);
 
   useEffect(() => {
     filterUsers();
-  }, [users, search, filter]);
+  }, [users, filter, sortConfig]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const data = await getUsers();
-      setUsers(data);
+      const response = await getUsers({
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        search: search || undefined
+      });
+      setUsers(response.users);
+      setTotalItems(response.total);
+      setFilteredUsers(response.users);
     } catch (err) {
       setError('Failed to fetch users');
+      console.error('Error fetching users:', err);
     } finally {
       setLoading(false);
     }
@@ -46,16 +98,6 @@ export default function UsersPage() {
 
   const filterUsers = () => {
     let result = [...users];
-
-    // Apply search
-    if (search) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(
-        (user) =>
-          user.name.toLowerCase().includes(searchLower) ||
-          user.email.toLowerCase().includes(searchLower)
-      );
-    }
 
     // Apply filter
     if (filter !== 'all') {
@@ -67,10 +109,17 @@ export default function UsersPage() {
     // Apply sorting
     if (sortConfig) {
       result.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+
+        if (!aValue && !bValue) return 0;
+        if (!aValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (!bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+
+        if (aValue < bValue) {
           return sortConfig.direction === 'asc' ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
+        if (aValue > bValue) {
           return sortConfig.direction === 'asc' ? 1 : -1;
         }
         return 0;
@@ -78,8 +127,6 @@ export default function UsersPage() {
     }
 
     setFilteredUsers(result);
-    // Reset to first page when filters change
-    setCurrentPage(1);
   };
 
   const handleSort = (key: keyof User) => {
@@ -151,7 +198,7 @@ export default function UsersPage() {
         `"${user.name}"`,
         `"${user.email}"`,
         user.email_verified ? 'Verified' : 'Unverified',
-        new Date(user.created_at).toLocaleDateString()
+        formatDate(user.created_at)
       ].join(','))
     ].join('\n');
 
@@ -224,225 +271,256 @@ export default function UsersPage() {
         <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="relative px-6 py-3">
-                      <input
-                        type="checkbox"
-                        className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        checked={selectAll}
-                        onChange={handleSelectAll}
-                      />
-                    </th>
-                    <th
-                      scope="col"
-                      className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6 cursor-pointer"
-                      onClick={() => handleSort('name')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Name
-                        {renderSortIcon('name')}
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer"
-                      onClick={() => handleSort('email')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Email
-                        {renderSortIcon('email')}
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer"
-                      onClick={() => handleSort('email_verified')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Status
-                        {renderSortIcon('email_verified')}
-                      </div>
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer"
-                      onClick={() => handleSort('created_at')}
-                    >
-                      <div className="flex items-center gap-2">
-                        Created At
-                        {renderSortIcon('created_at')}
-                      </div>
-                    </th>
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {paginatedUsers.length === 0 ? (
+              <ClientOnly fallback={<LoadingSkeleton />}>
+                <table className="min-w-full divide-y divide-gray-300">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="px-6 py-4 text-sm text-gray-500 text-center"
+                      <th scope="col" className="relative px-6 py-3">
+                        <input
+                          type="checkbox"
+                          className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          checked={selectAll}
+                          onChange={handleSelectAll}
+                        />
+                      </th>
+                      <th
+                        scope="col"
+                        className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6 cursor-pointer"
+                        onClick={() => handleSort('name')}
                       >
-                        No users found
-                      </td>
+                        <div className="flex items-center gap-2">
+                          Name
+                          {renderSortIcon('name')}
+                        </div>
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer"
+                        onClick={() => handleSort('email')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Email
+                          {renderSortIcon('email')}
+                        </div>
+                      </th>
+                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Status
+                      </th>
+                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Subscription
+                      </th>
+                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                        Renewal
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer"
+                        onClick={() => handleSort('created_at')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Created At
+                          {renderSortIcon('created_at')}
+                        </div>
+                      </th>
+                      <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
-                  ) : (
-                    paginatedUsers.map((user) => (
-                      <tr key={user.id}>
-                        <td className="relative px-6 py-4">
-                          <input
-                            type="checkbox"
-                            className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            checked={selectedUsers.has(user.id)}
-                            onChange={() => handleSelectUser(user.id)}
-                          />
-                        </td>
-                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                          {user.name}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {user.email}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          <span
-                            className={`inline-flex rounded-full px-2 text-xs font-semibold leading-5 ${
-                              user.email_verified
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}
-                          >
-                            {user.email_verified ? 'Verified' : 'Unverified'}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {new Date(user.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <Link
-                            href={`/users/${user.id}`}
-                            className="text-indigo-600 hover:text-indigo-900"
-                          >
-                            View
-                          </Link>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-4 text-sm text-gray-500 text-center">
+                          No users found
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <tr key={user.id}>
+                          <td className="relative px-6 py-4">
+                            <input
+                              type="checkbox"
+                              className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              checked={selectedUsers.has(user.id)}
+                              onChange={() => handleSelectUser(user.id)}
+                            />
+                          </td>
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                            {user.name}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {user.email}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            <div className="flex flex-col gap-1">
+                              <div>
+                                <span className="font-medium text-gray-700">Email Status:</span>
+                                <div className="mt-1">
+                                  <VerificationBadge verified={user.email_verified} />
+                                </div>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-700">Subscription Status:</span>
+                                <div className="mt-1">
+                                  <StatusBadge status={user.latest_status} />
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {user.latest_subscription_id ? (
+                              <div className="flex flex-col gap-1">
+                                <div>ID: {user.latest_subscription_id}</div>
+                                <div>Product: {user.latest_product_id || <NoData />}</div>
+                                <div>Variant: {user.latest_variant_id || <NoData />}</div>
+                              </div>
+                            ) : (
+                              <NoData />
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            <div className="flex flex-col gap-1">
+                              <div>
+                                Next: {user.latest_renewal_date ? formatDate(user.latest_renewal_date) : <NoData />}
+                              </div>
+                              <div>
+                                End: {user.latest_end_date ? formatDate(user.latest_end_date) : <NoData />}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {formatDate(user.created_at)}
+                          </td>
+                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                            <Link
+                              href={`/users/${user.id}`}
+                              className="text-indigo-600 hover:text-indigo-900"
+                            >
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </ClientOnly>
             </div>
           </div>
         </div>
       </div>
 
-      {selectedUsers.size > 0 && (
-        <div className="fixed bottom-0 inset-x-0 pb-2 sm:pb-5">
-          <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-            <div className="p-2 rounded-lg bg-indigo-600 shadow-lg sm:p-3">
-              <div className="flex items-center justify-between flex-wrap">
-                <div className="w-0 flex-1 flex items-center">
-                  <span className="flex p-2 rounded-lg">
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                  </span>
-                  <p className="ml-3 font-medium text-white truncate">
-                    <span className="md:hidden">
-                      {selectedUsers.size} selected
+      <ClientOnly>
+        {selectedUsers.size > 0 && (
+          <div className="fixed bottom-0 inset-x-0 pb-2 sm:pb-5">
+            <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+              <div className="p-2 rounded-lg bg-indigo-600 shadow-lg sm:p-3">
+                <div className="flex items-center justify-between flex-wrap">
+                  <div className="w-0 flex-1 flex items-center">
+                    <span className="flex p-2 rounded-lg">
+                      <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
                     </span>
-                    <span className="hidden md:inline">
-                      {selectedUsers.size} users selected
-                    </span>
-                  </p>
-                </div>
-                <div className="flex-shrink-0 sm:ml-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedUsers(new Set())}
-                    className="mr-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-600 focus:ring-white"
-                  >
-                    Clear Selection
-                  </button>
+                    <p className="ml-3 font-medium text-white truncate">
+                      <span className="md:hidden">
+                        {selectedUsers.size} selected
+                      </span>
+                      <span className="hidden md:inline">
+                        {selectedUsers.size} users selected
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 sm:ml-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUsers(new Set())}
+                      className="mr-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-600 focus:ring-white"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </ClientOnly>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-          <div className="flex flex-1 justify-between sm:hidden">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
-          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span>{' '}
-                to{' '}
-                <span className="font-medium">
-                  {Math.min(currentPage * ITEMS_PER_PAGE, filteredUsers.length)}
-                </span>{' '}
-                of <span className="font-medium">{filteredUsers.length}</span> results
-              </p>
+      <ClientOnly>
+        {totalItems > ITEMS_PER_PAGE && (
+          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+            <div className="flex flex-1 justify-between sm:hidden">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
-            <div>
-              <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                >
-                  <span className="sr-only">Previous</span>
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Showing{' '}
+                  <span className="font-medium">
+                    {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, totalItems)}
+                  </span>{' '}
+                  to{' '}
+                  <span className="font-medium">
+                    {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)}
+                  </span>{' '}
+                  of <span className="font-medium">{totalItems}</span> results
+                </p>
+              </div>
+              <div>
+                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
                   <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                      page === currentPage
-                        ? 'z-10 bg-indigo-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
-                    }`}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                   >
-                    {page}
+                    <span className="sr-only">Previous</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                    </svg>
                   </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                >
-                  <span className="sr-only">Next</span>
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </nav>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                        page === currentPage
+                          ? 'z-10 bg-indigo-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
+                          : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
+                  >
+                    <span className="sr-only">Next</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </ClientOnly>
     </div>
   );
 } 
