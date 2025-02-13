@@ -59,7 +59,7 @@ func (db *DB) GetVisitorJourneys(startTime, endTime time.Time) ([]analytics.Page
 	query := `
 		SELECT id, user_id, visitor_id, path, referrer, user_agent, ip_address, created_at
 		FROM page_views
-		WHERE user_id IS NULL AND created_at BETWEEN $1 AND $2
+		WHERE created_at BETWEEN $1 AND $2
 		ORDER BY visitor_id, created_at ASC
 	`
 
