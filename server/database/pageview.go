@@ -85,3 +85,78 @@ func (db *DB) GetVisitorJourneys(startTime, endTime time.Time) ([]analytics.Page
 
 	return pageViews, nil
 }
+
+// GetPageViewStats retrieves aggregated page view statistics within a time range
+func (db *DB) GetPageViewStats(startTime, endTime time.Time) (*analytics.PageViewResponse, error) {
+	// Get page stats
+	pageStatsQuery := `
+		SELECT path, COUNT(*) as view_count
+		FROM page_views
+		WHERE created_at BETWEEN $1 AND $2
+		GROUP BY path
+		ORDER BY view_count DESC
+	`
+
+	pageStatsRows, err := db.Query(pageStatsQuery, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer pageStatsRows.Close()
+
+	var pageStats []analytics.PageViewStats
+	for pageStatsRows.Next() {
+		var stat analytics.PageViewStats
+		err := pageStatsRows.Scan(&stat.Path, &stat.ViewCount)
+		if err != nil {
+			return nil, err
+		}
+		pageStats = append(pageStats, stat)
+	}
+
+	// Get daily stats
+	dailyStatsQuery := `
+		SELECT DATE(created_at) as date, COUNT(*) as views
+		FROM page_views
+		WHERE created_at BETWEEN $1 AND $2
+		GROUP BY DATE(created_at)
+		ORDER BY date ASC
+	`
+
+	dailyStatsRows, err := db.Query(dailyStatsQuery, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer dailyStatsRows.Close()
+
+	var dailyStats []analytics.DailyStats
+	for dailyStatsRows.Next() {
+		var stat analytics.DailyStats
+		err := dailyStatsRows.Scan(&stat.Date, &stat.Views)
+		if err != nil {
+			return nil, err
+		}
+		dailyStats = append(dailyStats, stat)
+	}
+
+	// Get total views and unique paths
+	totalsQuery := `
+		SELECT 
+			COUNT(*) as total_views,
+			COUNT(DISTINCT path) as unique_paths
+		FROM page_views
+		WHERE created_at BETWEEN $1 AND $2
+	`
+
+	var totalViews, uniquePaths int
+	err = db.QueryRow(totalsQuery, startTime, endTime).Scan(&totalViews, &uniquePaths)
+	if err != nil {
+		return nil, err
+	}
+
+	return &analytics.PageViewResponse{
+		PageStats:   pageStats,
+		DailyStats:  dailyStats,
+		TotalViews:  totalViews,
+		UniquePaths: uniquePaths,
+	}, nil
+}
