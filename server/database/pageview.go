@@ -54,16 +54,16 @@ func (db *DB) GetUserJourney(userID uuid.UUID, startTime, endTime time.Time) ([]
 	return pageViews, nil
 }
 
-// GetVisitorJourney retrieves the page view history for a specific visitor within a time range
-func (db *DB) GetVisitorJourney(visitorID string, startTime, endTime time.Time) ([]analytics.PageView, error) {
+// GetVisitorJourneys retrieves all visitor page views within a time range
+func (db *DB) GetVisitorJourneys(startTime, endTime time.Time) ([]analytics.PageView, error) {
 	query := `
 		SELECT id, user_id, visitor_id, path, referrer, user_agent, ip_address, created_at
 		FROM page_views
-		WHERE visitor_id = $1 AND created_at BETWEEN $2 AND $3
-		ORDER BY created_at ASC
+		WHERE user_id IS NULL AND created_at BETWEEN $1 AND $2
+		ORDER BY visitor_id, created_at ASC
 	`
 
-	rows, err := db.Query(query, visitorID, startTime, endTime)
+	rows, err := db.Query(query, startTime, endTime)
 	if err != nil {
 		return nil, err
 	}
