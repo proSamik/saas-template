@@ -140,3 +140,27 @@ func (h *AnalyticsHandler) GetVisitorJourney(w http.ResponseWriter, r *http.Requ
 	// Send response
 	json.NewEncoder(w).Encode(journeys)
 }
+
+// GetPageViewStats handles the POST request for retrieving page view statistics
+func (h *AnalyticsHandler) GetPageViewStats(w http.ResponseWriter, r *http.Request) {
+	// Parse request body
+	var req JourneyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get page view statistics
+	stats, err := h.pageViewService.GetPageViewStats(req.StartTime, req.EndTime)
+	if err != nil {
+		http.Error(w, "Failed to retrieve page view statistics", http.StatusInternalServerError)
+		return
+	}
+
+	// Send response
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
