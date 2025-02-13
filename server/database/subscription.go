@@ -4,6 +4,10 @@ import (
 	"saas-server/models"
 	"strconv"
 	"time"
+	"database/sql"
+	"log"
+
+	"github.com/google/uuid"
 )
 
 // CreateSubscription creates a new subscription record in the database
@@ -74,4 +78,89 @@ func (db *DB) GetSubscriptionByUserID(userID string) (*models.Subscription, erro
 	// Convert subscription_id to string
 	subscription.SubscriptionID = strconv.Itoa(subscriptionIDInt)
 	return &subscription, nil
+}
+
+// GetUserSubscriptionStatus retrieves only the subscription-related fields
+func (db *DB) GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error) {
+	var nullStatus sql.NullString
+	var nullProductID sql.NullInt64
+	var nullVariantID sql.NullInt64
+
+	query := `
+		SELECT latest_status, latest_product_id, latest_variant_id
+		FROM users
+		WHERE id = $1`
+
+	err := db.QueryRow(query, id).Scan(
+		&nullStatus,
+		&nullProductID,
+		&nullVariantID,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// Only create the status object if at least one field is not null
+	if !nullStatus.Valid && !nullProductID.Valid && !nullVariantID.Valid {
+		return nil, nil
+	}
+
+	status := &models.UserSubscriptionStatus{}
+
+	if nullStatus.Valid {
+		status.Status = &nullStatus.String
+	}
+	if nullProductID.Valid {
+		productID := int(nullProductID.Int64)
+		status.ProductID = &productID
+	}
+	if nullVariantID.Valid {
+		variantID := int(nullVariantID.Int64)
+		status.VariantID = &variantID
+	}
+
+	return status, nil
+}
+
+// UpdateUserSubscription updates a user's subscription in the database
+func (db *DB) UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		log.Printf("[DB] Error parsing UUID: %v", err)
+		return err
+	}
+
+	query := `
+		UPDATE users
+		SET latest_subscription_id = $2,
+			latest_status = $3,
+			latest_product_id = $4,
+			latest_variant_id = $5,
+			latest_renewal_date = $6,
+			latest_end_date = $7,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1`
+
+	result, err := db.Exec(query, parsedID, subscriptionID, status, productID, variantID, renewalDate, endDate)
+	if err != nil {
+		log.Printf("[DB] Error executing update query: %v", err)
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[DB] Error getting affected rows: %v", err)
+		return err
+	}
+
+	if rows == 0 {
+		log.Printf("[DB] No rows affected - user not found with ID: %s", userID)
+		return sql.ErrNoRows
+	}
+
+	return nil
 }
