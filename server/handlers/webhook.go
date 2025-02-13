@@ -126,6 +126,9 @@ type Database interface {
 	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	UpdateSubscription(subscriptionID int, status string, cancelled bool, productID int, variantID int, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
 	UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error
+
+	// Cache operations
+	InvalidateUserCache(userID string)
 }
 
 type WebhookHandler struct {
@@ -232,6 +235,10 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			orderAttrs.RefundedAt,
 			orderAttrs.RefundedAmountFormatted,
 		)
+		if err2 == nil && len(payload.Meta.CustomData) > 0 {
+			// Invalidate user cache after refund
+			h.DB.InvalidateUserCache(payload.Meta.CustomData["user_id"])
+		}
 		log.Printf("[Webhook] Processed order refund")
 
 	case "subscription_created":
@@ -289,7 +296,10 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("[Webhook] Successfully processed subscription creation")
+
+		// Invalidate user cache after subscription creation
+		h.DB.InvalidateUserCache(userID)
+		log.Printf("[Webhook] Successfully processed subscription creation and invalidated cache")
 
 	case "subscription_updated",
 		"subscription_payment_success",
@@ -303,6 +313,7 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		"subscription_payment_failed",
 		"subscription_payment_refunded":
 		log.Printf("[Webhook] Processing subscription event: %s", payload.Meta.EventName)
+
 		subscriptionID, err := strconv.Atoi(payload.Data.ID)
 		if err != nil {
 			log.Printf("[Webhook] Error converting subscription ID: %v", err)
@@ -365,7 +376,10 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-			log.Printf("[Webhook] Successfully updated user subscription details")
+
+			// Invalidate user cache after subscription update
+			h.DB.InvalidateUserCache(userID)
+			log.Printf("[Webhook] Successfully updated user subscription details and invalidated cache")
 		} else {
 			log.Printf("[Webhook] Skipping user subscription update - no user_id in CustomData")
 		}
