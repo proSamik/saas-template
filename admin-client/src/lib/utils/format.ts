@@ -3,7 +3,10 @@ export const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return '';
   try {
     const date = new Date(dateString);
-    return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = date.toLocaleString('default', { month: 'long' });
+    const year = date.getFullYear().toString().slice(-2);
+    return `${day} ${month} ${year}`;
   } catch {
     return '';
   }
