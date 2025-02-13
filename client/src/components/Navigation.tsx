@@ -86,10 +86,10 @@ const Navigation = () => {
               </button>
               {auth && (
                 <Link
-                  href="/dashboard"
+                  href="/overview"
                   className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
                 >
-                  Dashboard
+                  Overview
                 </Link>
               )}
             </div>
@@ -194,11 +194,11 @@ const Navigation = () => {
               </button>
               {auth && (
                 <Link
-                  href="/dashboard"
+                  href="/overview"
                   className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  Dashboard
+                  Overview
                 </Link>
               )}
             </div>
