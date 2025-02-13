@@ -60,6 +60,7 @@ func main() {
 	authMiddleware := middleware.NewAuthMiddleware(db, os.Getenv("JWT_SECRET"))
 	adminHandler := handlers.NewAdminHandler(db)
 	adminMiddleware := middleware.NewAdminMiddleware()
+	analyticsHandler := handlers.NewAnalyticsHandler(db)
 
 	// Create router
 	mux := http.NewServeMux()
@@ -104,12 +105,15 @@ func main() {
 	mux.Handle("/api/user/subscription/billing", authMiddleware.RequireAuth(http.HandlerFunc(userDataHandler.GetBillingPortal)))
 
 	// Analytics routes (public)
-	analyticsHandler := handlers.NewAnalyticsHandler(db)
 	mux.HandleFunc("/api/analytics/pageview", analyticsHandler.TrackPageView)
 
 	// Admin routes
 	mux.HandleFunc("/admin/login", adminHandler.Login)
 	mux.Handle("/admin/users", adminMiddleware.RequireAdmin(http.HandlerFunc(adminHandler.GetUsers)))
+
+	// Admin analytics routes (protected)
+	mux.Handle("/admin/analytics/user-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetUserJourney)))
+	mux.Handle("/admin/analytics/visitor-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetVisitorJourney)))
 
 	// Protected admin routes (example)
 	mux.Handle("/admin/dashboard", adminMiddleware.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
