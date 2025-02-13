@@ -69,16 +69,3 @@ export const getUsers = async (params: GetUsersParams = {}): Promise<GetUsersRes
     limit: data.limit || 20,
   };
 };
-
-export const getUser = async (userId: string): Promise<User> => {
-  const response = await fetch(`${API_URL}/admin/users/${userId}`, {
-    headers: headers(),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || 'Failed to fetch user');
-  }
-
-  return response.json();
-}; 
