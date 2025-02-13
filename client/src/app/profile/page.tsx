@@ -7,6 +7,7 @@ import Settings from '@/components/profile/Settings'
 import Subscription from '@/components/profile/Subscription'
 import Orders from '@/components/profile/Orders'
 import { authService } from '@/services/auth'
+import { useRouter } from 'next/navigation'
 
 const EditForm = memo(({ 
   formData, 
@@ -154,6 +155,7 @@ ProfileContent.displayName = 'ProfileContent'
 
 export default function Profile() {
   const { auth, updateAuth } = useAuth()
+  const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -171,16 +173,14 @@ export default function Profile() {
     }
   }, [auth])
 
+  useEffect(() => {
+    if (!auth) {
+      router.replace('/auth')
+    }
+  }, [auth, router])
+
   if (!auth) {
-    return (
-      <div className="min-h-screen bg-light-background dark:bg-dark-background">
-        <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
-          <div className="text-center text-light-foreground dark:text-dark-foreground">
-            Please log in to view your profile
-          </div>
-        </div>
-      </div>
-    )
+    return null
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
