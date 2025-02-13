@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUsers } from '@/lib/services/users';
@@ -53,6 +54,37 @@ const VerificationBadge = ({ verified }: { verified: boolean }) => (
   </span>
 );
 
+const UserDetails = ({ user }: { user: User }) => (
+  <div className="bg-gray-50 px-4 py-3 space-y-2">
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <span className="text-sm font-medium text-gray-500">User ID:</span>
+        <span className="ml-2 text-sm text-gray-900">{user.id}</span>
+      </div>
+      <div>
+        <span className="text-sm font-medium text-gray-500">Created At:</span>
+        <span className="ml-2 text-sm text-gray-900">{formatDate(user.created_at)}</span>
+      </div>
+      <div>
+        <span className="text-sm font-medium text-gray-500">Subscription:</span>
+        <span className="ml-2 text-sm text-gray-900">{user.latest_status || 'No Subscription'}</span>
+      </div>
+      <div>
+        <span className="text-sm font-medium text-gray-500">Renewal Date:</span>
+        <span className="ml-2 text-sm text-gray-900">{user.latest_renewal_date ? formatDate(user.latest_renewal_date) : 'N/A'}</span>
+      </div>
+      <div>
+        <span className="text-sm font-medium text-gray-500">Product ID:</span>
+        <span className="ml-2 text-sm text-gray-900">{user.latest_product_id?.toString() || 'N/A'}</span>
+      </div>
+      <div>
+        <span className="text-sm font-medium text-gray-500">Variant ID:</span>
+        <span className="ml-2 text-sm text-gray-900">{user.latest_variant_id?.toString() || 'N/A'}</span>
+      </div>
+    </div>
+  </div>
+);
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -68,6 +100,7 @@ export default function UsersPage() {
   } | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchUsers();
@@ -184,6 +217,16 @@ export default function UsersPage() {
     }
     setSelectedUsers(newSelected);
     setSelectAll(newSelected.size === paginatedUsers.length);
+  };
+
+  const toggleUserDetails = (userId: string) => {
+    const newExpanded = new Set(expandedUsers);
+    if (newExpanded.has(userId)) {
+      newExpanded.delete(userId);
+    } else {
+      newExpanded.add(userId);
+    }
+    setExpandedUsers(newExpanded);
   };
 
   const exportUsers = () => {
@@ -309,19 +352,6 @@ export default function UsersPage() {
                       <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                         Subscription
                       </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Renewal
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer"
-                        onClick={() => handleSort('created_at')}
-                      >
-                        <div className="flex items-center gap-2">
-                          Created At
-                          {renderSortIcon('created_at')}
-                        </div>
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -333,62 +363,45 @@ export default function UsersPage() {
                       </tr>
                     ) : (
                       filteredUsers.map((user) => (
-                        <tr key={user.id}>
-                          <td className="relative px-6 py-4">
-                            <input
-                              type="checkbox"
-                              className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              checked={selectedUsers.has(user.id)}
-                              onChange={() => handleSelectUser(user.id)}
-                            />
-                          </td>
-                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                            {user.name}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {user.email}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            <div className="flex flex-col gap-1">
-                              <div>
-                                <span className="font-medium text-gray-700">Email Status:</span>
-                                <div className="mt-1">
-                                  <VerificationBadge verified={user.email_verified} />
-                                </div>
+                        <React.Fragment key={user.id}>
+                          <tr className={expandedUsers.has(user.id) ? 'bg-gray-50' : 'hover:bg-gray-50'}>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                checked={selectedUsers.has(user.id)}
+                                onChange={() => handleSelectUser(user.id)}
+                              />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{user.name || <NoData />}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{user.email}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex space-x-2">
+                                <StatusBadge status={user.latest_status} />
+                                <VerificationBadge verified={user.email_verified} />
                               </div>
-                              <div>
-                                <span className="font-medium text-gray-700">Subscription Status:</span>
-                                <div className="mt-1">
-                                  <StatusBadge status={user.latest_status} />
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {user.latest_subscription_id ? (
-                              <div className="flex flex-col gap-1">
-                                <div>ID: {user.latest_subscription_id}</div>
-                                <div>Product: {user.latest_product_id || <NoData />}</div>
-                                <div>Variant: {user.latest_variant_id || <NoData />}</div>
-                              </div>
-                            ) : (
-                              <NoData />
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            <div className="flex flex-col gap-1">
-                              <div>
-                                Next: {user.latest_renewal_date ? formatDate(user.latest_renewal_date) : <NoData />}
-                              </div>
-                              <div>
-                                End: {user.latest_end_date ? formatDate(user.latest_end_date) : <NoData />}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {formatDate(user.created_at)}
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <button
+                                onClick={() => toggleUserDetails(user.id)}
+                                className="text-indigo-600 hover:text-indigo-900"
+                              >
+                                {expandedUsers.has(user.id) ? 'Hide Details' : 'Show Details'}
+                              </button>
+                            </td>
+                          </tr>
+                          {expandedUsers.has(user.id) && (
+                            <tr>
+                              <td colSpan={5} className="px-6 py-4">
+                                <UserDetails user={user} />
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))
                     )}
                   </tbody>
