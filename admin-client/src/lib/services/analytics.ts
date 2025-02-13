@@ -12,6 +12,13 @@ export interface PageView {
   created_at: string;
 }
 
+export interface JourneyRequest {
+  user_id?: string;
+  visitor_id?: string;
+  start_time: string;
+  end_time: string;
+}
+
 export interface AnalyticsStats {
   total_page_views: number;
   unique_visitors: number;
@@ -34,26 +41,17 @@ const headers = () => ({
   'Content-Type': 'application/json',
 });
 
-export const getAnalyticsStats = async (startTime: string, endTime: string): Promise<AnalyticsStats> => {
-  const response = await fetch(
-    `${API_URL}/admin/analytics/stats?start_time=${startTime}&end_time=${endTime}`,
-    { headers: headers() }
-  );
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch analytics stats');
-  }
-
-  return response.json();
-};
-
 export const getUserJourney = async (userId: string, startTime: string, endTime: string): Promise<PageView[]> => {
   const response = await fetch(
-    `${API_URL}/admin/analytics/journey`,
+    `${API_URL}/admin/analytics/user-journey`,
     {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ user_id: userId, start_time: startTime, end_time: endTime }),
+      body: JSON.stringify({ 
+        user_id: userId, 
+        start_time: startTime, 
+        end_time: endTime 
+      } as JourneyRequest),
     }
   );
 
@@ -70,7 +68,11 @@ export const getVisitorJourney = async (visitorId: string, startTime: string, en
     {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ visitor_id: visitorId, start_time: startTime, end_time: endTime }),
+      body: JSON.stringify({ 
+        visitor_id: visitorId, 
+        start_time: startTime, 
+        end_time: endTime 
+      } as JourneyRequest),
     }
   );
 
