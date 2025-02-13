@@ -572,7 +572,7 @@ func (h *AuthHandler) VerifyUser(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
+	return
 	}
 
 	// Try to get status from cache first
