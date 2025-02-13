@@ -2,12 +2,19 @@ package database
 
 import (
 	"saas-server/models"
+	"sync"
 	"strconv"
 	"time"
 	"database/sql"
 	"log"
 
 	"github.com/google/uuid"
+)
+
+// Cache management
+var (
+	subscriptionCache = make(map[string]interface{})
+	cacheMutex        sync.RWMutex
 )
 
 // CreateSubscription creates a new subscription record in the database
@@ -80,6 +87,47 @@ func (db *DB) GetSubscriptionByUserID(userID string) (*models.Subscription, erro
 	return &subscription, nil
 }
 
+
+// UpdateUserSubscription updates a user's subscription in the database
+func (db *DB) UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error {
+	parsedID, err := uuid.Parse(userID)
+	if err != nil {
+		log.Printf("[DB] Error parsing UUID: %v", err)
+		return err
+	}
+
+	query := `
+		UPDATE users
+		SET latest_subscription_id = $2,
+			latest_status = $3,
+			latest_product_id = $4,
+			latest_variant_id = $5,
+			latest_renewal_date = $6,
+			latest_end_date = $7,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1`
+
+	result, err := db.Exec(query, parsedID, subscriptionID, status, productID, variantID, renewalDate, endDate)
+	if err != nil {
+		log.Printf("[DB] Error executing update query: %v", err)
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[DB] Error getting affected rows: %v", err)
+		return err
+	}
+
+	if rows == 0 {
+		log.Printf("[DB] No rows affected - user not found with ID: %s", userID)
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+
 // GetUserSubscriptionStatus retrieves only the subscription-related fields
 func (db *DB) GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error) {
 	var nullStatus sql.NullString
@@ -126,41 +174,9 @@ func (db *DB) GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStat
 	return status, nil
 }
 
-// UpdateUserSubscription updates a user's subscription in the database
-func (db *DB) UpdateUserSubscription(userID string, subscriptionID int, status string, productID int, variantID int, renewalDate *time.Time, endDate *time.Time) error {
-	parsedID, err := uuid.Parse(userID)
-	if err != nil {
-		log.Printf("[DB] Error parsing UUID: %v", err)
-		return err
-	}
-
-	query := `
-		UPDATE users
-		SET latest_subscription_id = $2,
-			latest_status = $3,
-			latest_product_id = $4,
-			latest_variant_id = $5,
-			latest_renewal_date = $6,
-			latest_end_date = $7,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1`
-
-	result, err := db.Exec(query, parsedID, subscriptionID, status, productID, variantID, renewalDate, endDate)
-	if err != nil {
-		log.Printf("[DB] Error executing update query: %v", err)
-		return err
-	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
-		log.Printf("[DB] Error getting affected rows: %v", err)
-		return err
-	}
-
-	if rows == 0 {
-		log.Printf("[DB] No rows affected - user not found with ID: %s", userID)
-		return sql.ErrNoRows
-	}
-
-	return nil
+// InvalidateUserCache removes a user's data from the cache
+func (db *DB) InvalidateUserCache(userID string) {
+	cacheMutex.Lock()
+	delete(subscriptionCache, userID)
+	cacheMutex.Unlock()
 }
