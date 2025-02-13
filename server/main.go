@@ -81,7 +81,7 @@ func main() {
 	mux.Handle("/auth/account-password/reset", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.AccountPasswordReset)))
 
 	// User routes (protected)
-	mux.Handle("/user/profile", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
+	mux.Handle("/user/profile/update", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.UpdateProfile)))
 	mux.Handle("/user/verify-user", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.VerifyUser)))
 
 	// Payment webhook routes - initialize handler once for better resource management
