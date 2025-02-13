@@ -15,6 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   user: AuthState | null
   logout: () => Promise<void>
+  updateAuth: (auth: AuthState) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -61,13 +62,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
   }
 
+  const updateAuth = (newAuth: AuthState) => {
+    setAuth(newAuth)
+  }
+
   return (
     <AuthContext.Provider value={{
       auth,
       setAuth,
       isAuthenticated: !!auth,
       user: auth,
-      logout
+      logout,
+      updateAuth
     }}>
       {children}
     </AuthContext.Provider>
