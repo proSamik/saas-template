@@ -6,6 +6,8 @@ import (
 	"log"
 	"saas-server/models"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // CreateRefreshToken creates a new refresh token in the database
@@ -22,7 +24,10 @@ func (db *DB) CreateRefreshToken(userID string, tokenHash string, deviceInfo str
 		ipAddress = "0.0.0.0"
 	}
 
-	_, err := db.Exec(query, userID, tokenHash, deviceInfo, ipAddress, expiresAt)
+	// Generate a new UUID for the token
+	tokenID := uuid.New().String()
+
+	_, err := db.Exec(query, tokenID, userID, tokenHash, deviceInfo, ipAddress, expiresAt)
 	return err
 }
 
