@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 
 import { LoginForm } from '@/components/auth/login-form'
 import { SignUpForm } from '@/components/auth/signup-form'
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
-
 
 type AuthView = 'login' | 'signup' | 'forgot-password'
 
@@ -29,7 +29,19 @@ const slideVariants = {
 }
 
 export default function AuthPage() {
+  const router = useRouter()
+  const { isAuthenticated } = useAuth()
   const searchParams = useSearchParams()
+  const [isLoading, setIsLoading] = useState(true)
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/profile')
+    } else {
+      setIsLoading(false)
+    }
+  }, [isAuthenticated, router])
+
   const [view, setView] = useState<AuthView>(
     (searchParams.get('view') as AuthView) || 'login'
   )
@@ -43,6 +55,10 @@ export default function AuthPage() {
     
     setPage([page + direction, direction])
     setView(newView)
+  }
+
+  if (isLoading || isAuthenticated) {
+    return null
   }
 
   return (
