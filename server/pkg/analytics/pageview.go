@@ -22,7 +22,7 @@ type PageView struct {
 type PageViewService interface {
 	TrackPageView(view *PageView) error
 	GetUserJourney(userID uuid.UUID, startTime, endTime time.Time) ([]PageView, error)
-	GetVisitorJourney(visitorID string, startTime, endTime time.Time) ([]PageView, error)
+	GetVisitorJourneys(startTime, endTime time.Time) ([]PageView, error)
 }
 
 // NewPageView creates a new page view instance
