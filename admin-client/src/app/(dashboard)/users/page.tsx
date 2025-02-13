@@ -322,9 +322,6 @@ export default function UsersPage() {
                           {renderSortIcon('created_at')}
                         </div>
                       </th>
-                      <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                        <span className="sr-only">Actions</span>
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -390,14 +387,6 @@ export default function UsersPage() {
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                             {formatDate(user.created_at)}
-                          </td>
-                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                            <Link
-                              href={`/users/${user.id}`}
-                              className="text-indigo-600 hover:text-indigo-900"
-                            >
-                              View
-                            </Link>
                           </td>
                         </tr>
                       ))
