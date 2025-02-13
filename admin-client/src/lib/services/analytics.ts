@@ -12,9 +12,30 @@ export interface PageView {
   created_at: string;
 }
 
+interface APIPageView {
+  ID: string;
+  UserID?: string;
+  VisitorID?: string;
+  Path: string;
+  Referrer?: string;
+  UserAgent: string;
+  IPAddress: string;
+  CreatedAt: string;
+}
+
+const mapPageView = (view: APIPageView): PageView => ({
+  id: view.ID,
+  user_id: view.UserID,
+  visitor_id: view.VisitorID,
+  path: view.Path,
+  referrer: view.Referrer,
+  user_agent: view.UserAgent,
+  ip_address: view.IPAddress,
+  created_at: view.CreatedAt,
+});
+
 export interface JourneyRequest {
   user_id?: string;
-  visitor_id?: string;
   start_time: string;
   end_time: string;
 }
@@ -51,34 +72,39 @@ export const getUserJourney = async (userId: string, startTime: string, endTime:
         user_id: userId, 
         start_time: startTime, 
         end_time: endTime 
-      } as JourneyRequest),
+      }),
     }
   );
 
   if (!response.ok) {
-    throw new Error('Failed to fetch user journey');
+    const error = await response.text();
+    throw new Error(error || 'Failed to fetch user journey');
   }
 
-  return response.json();
+  const data: APIPageView[] = await response.json();
+  return data.map(mapPageView);
 };
 
-export const getVisitorJourney = async (visitorId: string, startTime: string, endTime: string): Promise<PageView[]> => {
+export const getVisitorJourney = async (startTime: string, endTime: string): Promise<PageView[]> => {
   const response = await fetch(
     `${API_URL}/admin/analytics/visitor-journey`,
     {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ 
-        visitor_id: visitorId, 
         start_time: startTime, 
         end_time: endTime 
-      } as JourneyRequest),
+      }),
     }
   );
 
   if (!response.ok) {
-    throw new Error('Failed to fetch visitor journey');
+    const error = await response.text();
+    throw new Error(error || 'Failed to fetch visitor journeys');
   }
 
-  return response.json();
+  const data: APIPageView[] = await response.json();
+  if (!data) return [];
+  
+  return data.map(mapPageView);
 }; 
