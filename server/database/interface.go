@@ -27,7 +27,7 @@ type DBInterface interface {
 	// Token blacklist operations
 	AddToBlacklist(jti string, userID string, expiresAt time.Time) error
 	IsTokenBlacklisted(jti string) (bool, error)
-	CleanupExpiredBlacklistedTokens() error
+	CleanupExpiredBlacklistedTokens() error //TODO: Implement this
 
 	// Password reset operations
 	CreatePasswordResetToken(userID string, token string, expiresAt time.Time) error
@@ -41,8 +41,6 @@ type DBInterface interface {
 	GetSubscriptionByUserID(userID string) (*models.Subscription, error)
 
 	// Additional operations
-	InvalidateSession(token string) error
-	InvalidateRefreshTokensForUser(userID string) error
 	CreateOrder(userID string, orderID int, customerID int, productID int, variantID int, status string, subtotalFormatted string, taxFormatted string, totalFormatted string, taxInclusive bool) error
 	UpdateOrderRefund(orderID int, refundedAt *time.Time, refundedAmountFormatted string) error
 	CreateSubscription(userID string, subscriptionID int, orderID int, customerID int, productID int, variantID int, status string, renewsAt *time.Time, endsAt *time.Time, trialEndsAt *time.Time) error
