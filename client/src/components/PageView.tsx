@@ -1,31 +1,52 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { authService } from '@/services/auth';
 
 export default function PageView() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const trackedPaths = useRef(new Set());
 
   useEffect(() => {
+    const fullPath = searchParams.size > 0 
+      ? `${pathname}?${searchParams.toString()}`
+      : pathname;
+
+    // Check if this exact path has already been tracked
+    if (trackedPaths.current.has(fullPath)) {
+      return;
+    }
+
     const trackPageView = async () => {
       try {
+        // Add to tracked paths before making the request
+        trackedPaths.current.add(fullPath);
+
         await authService.post('/api/analytics/pageview', {
-          path: pathname,
+          path: fullPath,
           timestamp: new Date().toISOString(),
           userAgent: navigator.userAgent,
           screenResolution: `${window.screen.width}x${window.screen.height}`,
           language: navigator.language
         });
-        console.log('[Analytics] Page view tracked:', pathname);
+        console.log('[Analytics] Page view tracked:', fullPath);
       } catch (error) {
-        // Silently handle errors to not disrupt user experience
+        // Remove from tracked paths if request fails
+        trackedPaths.current.delete(fullPath);
         console.error('[Analytics] Failed to track page view:', error);
       }
     };
 
     trackPageView();
-  }, [pathname]);
+
+    // Cleanup function to remove the path from tracked set when component unmounts
+    // or when pathname/searchParams change
+    return () => {
+      trackedPaths.current.delete(fullPath);
+    };
+  }, [pathname, searchParams]);
 
   // This component doesn't render anything
   return null;
