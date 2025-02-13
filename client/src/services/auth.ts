@@ -390,5 +390,19 @@ export const authService = {
         return response;
       }
     );
+  },
+
+  async put(url: string, data: any) {
+    const key = `put:${url}:${JSON.stringify(data)}`;
+    
+    return requestDeduper.execute(
+      key,
+      async () => {
+        console.log(`[Auth] Sending PUT request to ${url}`);
+        const response = await api.put(url, data);
+        console.log(`[Auth] PUT response received from ${url}`);
+        return response;
+      }
+    );
   }
 };
