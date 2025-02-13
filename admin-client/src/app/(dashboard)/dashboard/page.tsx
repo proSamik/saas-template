@@ -5,6 +5,7 @@ import { getPageViewStats, type PageViewStats, type DailyStats } from '@/lib/ser
 import Loading from '@/components/ui/loading';
 import Error from '@/components/ui/error';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { formatDate } from '@/lib/utils/format';
 
 // Date range options
 const DATE_RANGES = [
@@ -159,11 +160,11 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
                     dataKey="date" 
-                    tickFormatter={(date) => new Date(date).toLocaleDateString()}
+                    tickFormatter={(date) => formatDate(date)}
                   />
                   <YAxis />
                   <Tooltip 
-                    labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                    labelFormatter={(date) => formatDate(date)}
                     formatter={(value: number) => [value.toLocaleString(), 'Views']}
                   />
                   <Area 
