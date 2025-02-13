@@ -58,13 +58,15 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // If no cookie or invalid, fetch from API
-      const subscriptionData = await authService.get('/user/verify-user')
+      const response = await authService.get('/user/verify-user')
+      const subscriptionData = response?.data || null
 
+      // If no subscription data, set default null values
       const newUserData = {
         subscription: {
-          status: subscriptionData.status || null,
-          productId: subscriptionData.product_id || null,
-          variantId: subscriptionData.variant_id || null
+          status: subscriptionData?.status || null,
+          productId: subscriptionData?.product_id || null,
+          variantId: subscriptionData?.variant_id || null
         }
       }
 
