@@ -114,6 +114,7 @@ func main() {
 	// Admin analytics routes (protected)
 	mux.Handle("/admin/analytics/user-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetUserJourney)))
 	mux.Handle("/admin/analytics/visitor-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetVisitorJourney)))
+	mux.Handle("/admin/analytics/page-stats", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetPageViewStats)))
 
 	// Protected admin routes (example)
 	mux.Handle("/admin/dashboard", adminMiddleware.RequireAdmin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
