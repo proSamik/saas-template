@@ -57,6 +57,23 @@ export interface AnalyticsStats {
   }>;
 }
 
+export interface PageViewStats {
+  path: string;
+  view_count: number;
+}
+
+export interface DailyStats {
+  date: string;
+  views: number;
+}
+
+export interface AnalyticsResponse {
+  pageStats: PageViewStats[];
+  dailyStats: DailyStats[];
+  totalViews: number;
+  uniquePaths: number;
+}
+
 const headers = () => ({
   'Authorization': `Bearer ${getAuthToken()}`,
   'Content-Type': 'application/json',
@@ -107,4 +124,26 @@ export const getVisitorJourney = async (startTime: string, endTime: string): Pro
   if (!data) return [];
   
   return data.map(mapPageView);
+};
+
+export const getPageViewStats = async (startTime: string, endTime: string): Promise<AnalyticsResponse> => {
+  const response = await fetch(
+    `${API_URL}/admin/analytics/page-stats`,
+    {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ 
+        start_time: startTime, 
+        end_time: endTime 
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || 'Failed to fetch page statistics');
+  }
+
+  const data = await response.json();
+  return data;
 }; 
