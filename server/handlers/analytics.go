@@ -25,6 +25,7 @@ type PageViewRequest struct {
 type JourneyRequest struct {
 	StartTime time.Time `json:"start_time"`
 	EndTime   time.Time `json:"end_time"`
+	UserID    string    `json:"user_id,omitempty"`
 	VisitorID string    `json:"visitor_id,omitempty"`
 }
 
@@ -90,17 +91,22 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 
 // GetUserJourney handles the GET request for retrieving a user's journey
 func (h *AnalyticsHandler) GetUserJourney(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context
-	userID, ok := r.Context().Value("user_id").(uuid.UUID)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Parse query parameters
+	// Parse request body
 	var req JourneyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.UserID == "" {
+		http.Error(w, "User ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Convert string to UUID
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID format", http.StatusBadRequest)
 		return
 	}
 
@@ -115,27 +121,22 @@ func (h *AnalyticsHandler) GetUserJourney(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(journey)
 }
 
-// GetVisitorJourney handles the GET request for retrieving a visitor's journey
+// GetVisitorJourney handles the GET request for retrieving visitor journeys
 func (h *AnalyticsHandler) GetVisitorJourney(w http.ResponseWriter, r *http.Request) {
-	// Parse query parameters
+	// Parse request body
 	var req JourneyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if req.VisitorID == "" {
-		http.Error(w, "Visitor ID is required", http.StatusBadRequest)
-		return
-	}
-
-	// Get visitor journey
-	journey, err := h.pageViewService.GetVisitorJourney(req.VisitorID, req.StartTime, req.EndTime)
+	// Get all visitor journeys for the time period
+	journeys, err := h.pageViewService.GetVisitorJourneys(req.StartTime, req.EndTime)
 	if err != nil {
-		http.Error(w, "Failed to retrieve visitor journey", http.StatusInternalServerError)
+		http.Error(w, "Failed to retrieve visitor journeys", http.StatusInternalServerError)
 		return
 	}
 
 	// Send response
-	json.NewEncoder(w).Encode(journey)
+	json.NewEncoder(w).Encode(journeys)
 }
