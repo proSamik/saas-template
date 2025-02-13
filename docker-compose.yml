@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      # Server Configuration
+      - PORT=8080
+      - ENV=${ENV}
+      # Database Configuration
+      - DB_HOST=postgres
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRY=${JWT_EXPIRY}
+      # CORS Configuration
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - SAME_ORIGIN=${SAME_ORIGIN}
+      - CLIENT_URL=${CLIENT_URL}
+      - FRONTEND_URL=${FRONTEND_URL}
+      # OAuth Configuration
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GITHUB_REDIRECT_URL=${GITHUB_REDIRECT_URL}
+      # LemonSqueezy Configuration
+      - LEMON_SQUEEZY_API_KEY=${LEMON_SQUEEZY_API_KEY}
+      - LEMON_SQUEEZY_STORE_ID=${LEMON_SQUEEZY_STORE_ID}
+      - LEMONS_SQUEEZY_PRODUCT_ID=${LEMONS_SQUEEZY_PRODUCT_ID}
+      - LEMON_SQUEEZY_SIGNING_SECRET=${LEMON_SQUEEZY_SIGNING_SECRET}
+      # Plunk Configuration
+      - PLUNK_SECRET_API_KEY=${PLUNK_SECRET_API_KEY}
+      # Admin Configuration
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
+      - ADMIN_CLIENT_URL=${ADMIN_CLIENT_URL}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        # API Configuration
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+        # Google OAuth
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+        - NEXT_PUBLIC_GOOGLE_REDIRECT_URI=${NEXT_PUBLIC_GOOGLE_REDIRECT_URI}
+        # Github OAuth
+        - NEXT_PUBLIC_GITHUB_CLIENT_ID=${NEXT_PUBLIC_GITHUB_CLIENT_ID}
+        - NEXT_PUBLIC_GITHUB_REDIRECT_URI=${NEXT_PUBLIC_GITHUB_REDIRECT_URI}
+        # LemonSqueezy Configuration
+        - NEXT_PUBLIC_LEMONSQUEEZY_API_KEY=${NEXT_PUBLIC_LEMONSQUEEZY_API_KEY}
+        - NEXT_PUBLIC_LEMONSQUEEZY_STORE_ID=${NEXT_PUBLIC_LEMONSQUEEZY_STORE_ID}
+        - NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID=${NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID}
+        - NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_1=${NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_1}
+        - NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_2=${NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_2}
+        - NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_3=${NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_3}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+
+  admin-client:
+    build:
+      context: ./admin-client
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data: 
