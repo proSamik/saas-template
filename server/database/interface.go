@@ -15,6 +15,7 @@ type DBInterface interface {
 	UpdatePassword(id, hashedPassword string) error
 	UserExists(email string) (bool, error)
 	GetUserSubscriptionStatus(id string) (*models.UserSubscriptionStatus, error)
+	InvalidateUserCache(userID string)
 
 	// Admin operations
 	GetUsers(page int, limit int, search string) ([]models.User, int, error)
