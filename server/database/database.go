@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
 	_ "github.com/lib/pq"
 )
 
@@ -34,3 +35,4 @@ func New(dataSourceName string) (*DB, error) {
 	}
 	return &DB{db}, nil
 }
+
