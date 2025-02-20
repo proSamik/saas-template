@@ -83,12 +83,18 @@ export function Footer() {
               <h3 className="text-sm font-semibold text-light-foreground dark:text-dark-foreground">Legal</h3>
               <ul role="list" className="mt-6 space-y-4">
                 <li>
-                  <Link href="/privacy-policy" className="text-sm text-light-muted dark:text-dark-muted hover:text-primary-600">
+                  <Link 
+                    href="/legal?tab=privacy" 
+                    className="text-sm text-light-muted dark:text-dark-muted hover:text-primary-600"
+                  >
                     Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link href="/terms-of-service" className="text-sm text-light-muted dark:text-dark-muted hover:text-primary-600">
+                  <Link 
+                    href="/legal?tab=terms" 
+                    className="text-sm text-light-muted dark:text-dark-muted hover:text-primary-600"
+                  >
                     Terms of Service
                   </Link>
                 </li>
