@@ -1,24 +1,72 @@
 'use client'
 
+import { motion } from 'framer-motion'
+
+/**
+ * Demo section component that showcases the product through a video demonstration
+ */
 export function Demo() {
   return (
-    <div id="demo" className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
-      <div className="mx-auto max-w-2xl lg:text-center">
-        <h2 className="text-base font-semibold leading-7 text-primary-600">See it in action</h2>
-        <p className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-          Experience the power of our platform
-        </p>
-        <p className="mt-6 text-lg leading-8 text-light-muted dark:text-dark-muted">
-          Watch our demo to see how our platform can transform your business operations and drive growth.
-        </p>
-        <div className="mt-10 flex justify-center">
-          <div className="relative rounded-2xl bg-light-accent dark:bg-dark-accent p-2 w-full max-w-3xl aspect-video">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-light-muted dark:text-dark-muted">Demo Video Placeholder</span>
-            </div>
-          </div>
+    <section id="demo" className="py-24 bg-light-background dark:bg-dark-background overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Section Header */}
+        <div className="text-center mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-light-foreground dark:text-dark-foreground mb-4">
+              See it in Action
+            </h2>
+            <p className="text-xl text-light-muted dark:text-dark-muted max-w-2xl mx-auto">
+              Watch how our platform streamlines your workflow and enhances productivity
+            </p>
+          </motion.div>
         </div>
+
+        {/* Video Container */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="relative aspect-video max-w-5xl mx-auto rounded-2xl overflow-hidden shadow-2xl"
+        >
+          <div className="absolute inset-0 bg-gradient-to-tr from-light-accent/10 to-transparent dark:from-dark-accent/10 rounded-2xl" />
+          
+          <iframe
+            width="100%"
+            height="100%"
+            src="https://www.youtube.com/embed/cn8MsmLzOQQ?autoplay=0&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&disablekb=1&fs=1&cc_load_policy=0"
+            title="Product Demo"
+            loading="lazy"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            className="absolute inset-0 w-full h-full"
+          />
+        </motion.div>
+
+        {/* Call to Action */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="text-center mt-16"
+        >
+          <p className="text-lg text-light-muted dark:text-dark-muted mb-8">
+            Ready to transform your workflow?
+          </p>
+          <a
+            href="#pricing"
+            className="inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-light-accent dark:bg-dark-accent hover:opacity-90 transition-opacity"
+          >
+            Get Started
+          </a>
+        </motion.div>
       </div>
-    </div>
+    </section>
   )
 }
