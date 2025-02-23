@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Navigation } from '@/components/Navigation'
 import { Footer } from '@/components/Footer'
 
 /**
@@ -23,7 +22,6 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
-      <Navigation />
 
       <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
