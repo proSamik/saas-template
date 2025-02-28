@@ -12,7 +12,7 @@ function UserLayoutContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !userData) {
-      router.replace('/#pricing')
+      router.replace('/profile')
     }
   }, [userData, loading, router])
 
