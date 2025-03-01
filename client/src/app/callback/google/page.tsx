@@ -52,16 +52,19 @@ export default function GoogleCallback() {
           router.push('/profile')
           toast.success('Logged in with Google successfully!')
         }
-      } catch (error: any) {
+      } catch (error) {
+        // Type guard to handle error response safely
+        const errorMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to authenticate with Google';
+
         // Send error back to opener window if it exists
         if (window.opener) {
           window.opener.postMessage({
             type: 'GOOGLE_AUTH_ERROR',
-            error: error.response?.data?.message || 'Failed to authenticate with Google'
+            error: errorMessage
           }, '*')
           window.close()
         } else {
-          toast.error(error.response?.data?.message || 'Failed to authenticate with Google')
+          toast.error(errorMessage)
           router.push('/auth')
         }
       }
