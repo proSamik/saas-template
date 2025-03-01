@@ -32,15 +32,16 @@ export function GoogleAuth() {
               })
               router.push('/profile')
               toast.success('Logged in with Google successfully!')
-            } catch (error: any) {
-              toast.error(error.response?.data?.message || 'Failed to authenticate with Google')
+            } catch {
+              setIsLoading(false) // Reset loading state on error
+              toast.error('Failed to initialize Google Sign-In') // Show error message
             }
           }
           setIsLoading(false)
         }
       })
       client.requestCode()
-    } catch (error: any) {
+    } catch {
       setIsLoading(false)
       toast.error('Failed to initialize Google Sign-In')
     }
@@ -50,6 +51,7 @@ export function GoogleAuth() {
     <SocialButton
       provider="google"
       onClick={handleGoogleSignIn}
+      disabled={isLoading} // Disable button while loading
       icon={
         <svg className="h-5 w-5" aria-hidden="true" viewBox="0 0 24 24">
           <path
