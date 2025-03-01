@@ -1,3 +1,4 @@
+
 'use client'
 
 import { authService } from '@/services/auth'
@@ -7,14 +8,9 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
 export default function Settings() {
-  const { user, auth } = useAuth()
+  const { auth } = useAuth()
   const router = useRouter()
-
-  if (!auth) {
-    router.push('/auth')
-    return null
-  }
-
+  
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -22,6 +18,12 @@ export default function Settings() {
   const [success, setSuccess] = useState(false)
   const [tokenStatus, setTokenStatus] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Redirect if not authenticated
+  if (!auth) {
+    router.push('/auth')
+    return null
+  }
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,7 +41,7 @@ export default function Settings() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-    } catch (err) {
+    } catch{
       setError('Failed to reset password. Please try again.')
     }
   }
@@ -49,7 +51,7 @@ export default function Settings() {
       setIsLoading(true)
       await authService.sendVerificationEmail()
       toast.success('Verification email sent! Please check your inbox.')
-    } catch (error) {
+    } catch {
       toast.error('Failed to send verification email. Please try again.')
     } finally {
       setIsLoading(false)
@@ -60,7 +62,7 @@ export default function Settings() {
     try {
       const status = await authService.checkRefreshToken()
       setTokenStatus(`Token Status: ${JSON.stringify(status, null, 2)}`)
-    } catch (err) {
+    } catch{
       setTokenStatus('Error checking refresh token status')
     }
   }
