@@ -60,8 +60,8 @@ export default function ResetPasswordPage() {
       await authService.resetPassword(token, password)
       toast.success('Password reset successfully')
       router.push('/auth?view=login')
-    } catch (err: any) {
-      const message = err.response?.data?.message || 'Failed to reset password'
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to reset password'
       setError(message)
       toast.error(message)
     } finally {
