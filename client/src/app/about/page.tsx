@@ -15,7 +15,7 @@ export default function About() {
             About Us
           </h1>
           <p className="mt-6 text-lg leading-8 text-light-muted dark:text-dark-muted">
-            We're building the future of software development with modern tools and infrastructure.
+            We&apos;re building the future of software development with modern tools and infrastructure.
           </p>
         </div>
 
@@ -52,7 +52,7 @@ export default function About() {
             <div>
               <dt className="text-lg font-semibold text-light-foreground dark:text-dark-foreground">Security</dt>
               <dd className="mt-2 text-base text-light-muted dark:text-dark-muted">
-                We prioritize the security and privacy of our users' data above all else.
+                We prioritize the security and privacy of our users&apos; data above all else.
               </dd>
             </div>
           </dl>
@@ -61,7 +61,7 @@ export default function About() {
             Our Team
           </h2>
           <p className="mt-6 text-lg leading-8 text-light-muted dark:text-dark-muted">
-            We're a diverse team of developers, designers, and technology enthusiasts passionate about creating exceptional developer tools and experiences.
+            We&apos;re a diverse team of developers, designers, and technology enthusiasts passionate about creating exceptional developer tools and experiences.
           </p>
         </div>
       </div>
