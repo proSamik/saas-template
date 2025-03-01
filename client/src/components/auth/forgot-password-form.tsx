@@ -73,7 +73,7 @@ export function ForgotPasswordForm({ onBackToSignInClick }: ForgotPasswordFormPr
 
       <div>
         <p className="text-sm text-light-muted dark:text-dark-muted">
-          Enter your email address and we'll send you a link to reset your password.
+          Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
       </div>
 
