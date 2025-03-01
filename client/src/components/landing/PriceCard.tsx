@@ -71,9 +71,9 @@ export function PriceCard({
       } else {
         toast.error('No valid URL received');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error:', error);
-      toast.error(error?.response?.data?.message || 'Failed to process checkout. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to process checkout. Please try again.');
     } finally {
       setIsLoading(false);
     }
