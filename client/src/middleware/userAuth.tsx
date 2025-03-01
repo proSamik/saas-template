@@ -9,7 +9,7 @@ export function withUserAuth<P extends object>(
   WrappedComponent: React.ComponentType<P>
 ) {
   return function WithUserAuthWrapper(props: P) {
-    const { auth, isAuthenticated } = useAuth()
+    const {isAuthenticated } = useAuth()
     const { clearUserData } = useUserData()
     const router = useRouter()
     const [isInitialized, setIsInitialized] = useState(false)
@@ -39,7 +39,7 @@ export function withUserAuth<P extends object>(
 }
 
 export function UserAuthProvider({ children }: { children: React.ReactNode }) {
-  const { auth, isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth()
   const { clearUserData } = useUserData()
   const router = useRouter()
   const [isInitialized, setIsInitialized] = useState(false)
