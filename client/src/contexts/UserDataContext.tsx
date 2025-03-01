@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import { authService } from '@/services/auth'
 
@@ -26,12 +26,12 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const clearUserData = () => {
+  const clearUserData = useCallback(() => {
     setUserData(null)
     document.cookie = 'userData=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure; samesite=strict'
-  }
+  }, [])
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     if (!isAuthenticated || !auth) {
       clearUserData()
       return
@@ -82,7 +82,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isAuthenticated, auth, clearUserData])
 
   useEffect(() => {
     if (isAuthenticated && auth) {
@@ -90,11 +90,11 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     } else if (!isAuthenticated) {
       clearUserData()
     }
-  }, [isAuthenticated, auth])
+  }, [isAuthenticated, auth, fetchUserData, clearUserData])
 
-  const refreshUserData = async () => {
+  const refreshUserData = useCallback(async () => {
     await fetchUserData()
-  }
+  }, [fetchUserData])
 
   return (
     <UserDataContext.Provider value={{ userData, loading, error, refreshUserData, clearUserData }}>
