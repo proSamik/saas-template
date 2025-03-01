@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useState } from 'react'
@@ -95,7 +96,7 @@ export function LoginForm({ onSignUpClick, onForgotPasswordClick }: LoginFormPro
           onClick={onSignUpClick}
           className="text-sm font-medium text-light-accent dark:text-dark-accent hover:text-opacity-90"
         >
-          Don't have an account? Sign up
+          Don&apos;t have an account? Sign up
         </button>
       </div>
     </div>
