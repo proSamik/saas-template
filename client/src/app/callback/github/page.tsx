@@ -52,16 +52,19 @@ export default function GithubCallback() {
           router.push('/profile')
           toast.success('Logged in with GitHub successfully!')
         }
-      } catch (error: any) {
+      } catch (error) {
+        // Type guard to handle error response safely
+        const errorMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to authenticate with GitHub';
+
         // Send error back to opener window if it exists
         if (window.opener) {
           window.opener.postMessage({
             type: 'GITHUB_AUTH_ERROR',
-            error: error.response?.data?.message || 'Failed to authenticate with GitHub'
+            error: errorMessage
           }, '*')
           window.close()
         } else {
-          toast.error(error.response?.data?.message || 'Failed to authenticate with GitHub')
+          toast.error(errorMessage)
           router.push('/auth')
         }
       }
