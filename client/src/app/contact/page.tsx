@@ -14,6 +14,14 @@ export default function Contact() {
     message: ''
   })
 
+  /**
+   * Handles the form submission event.
+   * Prevents the default form submission behavior,
+   * logs the form data to the console, and can be extended
+   * to include actual form submission logic.
+   * 
+   * @param e - The form event
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     // TODO: Implement form submission logic
@@ -29,7 +37,7 @@ export default function Contact() {
             Contact Us
           </h1>
           <p className="mt-6 text-lg leading-8 text-light-muted dark:text-dark-muted">
-            Have questions? We're here to help. Send us a message and we'll respond as soon as possible.
+            Have questions? We&apos;re here to help. Send us a message and we&apos;ll respond as soon as possible.
           </p>
         </div>
 
