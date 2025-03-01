@@ -14,6 +14,11 @@ interface VerificationState {
   isAlreadyVerified: boolean;
 }
 
+/**
+ * VerifyEmail component handles the email verification process.
+ * It checks the verification token, updates the authentication state,
+ * and provides user feedback based on the verification status.
+ */
 export default function VerifyEmail() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -24,9 +29,9 @@ export default function VerifyEmail() {
     isAlreadyVerified: false
   });
   
-  // Moved the declaration of hasAttemptedRef and navigationTimeoutRef to the state object
-  const [hasAttemptedRef] = useState(useRef(false));
-  const [navigationTimeoutRef] = useState(useRef<NodeJS.Timeout | null>(null)); 
+  // Refs to track if verification has been attempted and to manage navigation timeout
+  const hasAttemptedRef = useRef(false);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null); 
 
   // Cleanup function for navigation timeout
   useEffect(() => {
