@@ -23,17 +23,17 @@ interface OrderData {
 export default function Orders() {
   const { auth } = useAuth()
   const router = useRouter()
-
-  if (!auth) {
-    router.push('/auth')
-    return null
-  }
-
   const [orders, setOrders] = useState<OrderData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // If not authenticated, redirect to auth page
+    if (!auth) {
+      router.push('/auth')
+      return
+    }
+
     const fetchOrders = async () => {
       try {
         const response = await authService.get<OrderData[]>('/api/user/orders')
@@ -51,7 +51,12 @@ export default function Orders() {
     }
 
     fetchOrders()
-  }, [])
+  }, [auth, router])
+
+  // Show nothing during redirect
+  if (!auth) {
+    return null
+  }
 
   if (loading) {
     return (
