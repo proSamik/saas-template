@@ -2,6 +2,7 @@
 
 import { testimonials } from '@/data/landing'
 
+// The Testimonials component renders a section displaying user testimonials.
 export function Testimonials() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
@@ -14,7 +15,7 @@ export function Testimonials() {
       <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-8 text-sm leading-6 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
         {testimonials.map((testimonial) => (
           <div key={testimonial.author} className="rounded-2xl bg-light-background dark:bg-dark-background p-8 ring-1 ring-light-accent dark:ring-dark-accent">
-            <p className="text-light-muted dark:text-dark-muted">"{testimonial.content}"</p>
+            <p className="text-light-muted dark:text-dark-muted">&quot;{testimonial.content}&quot;</p>
             <div className="mt-6 flex items-center gap-x-4">
               <div className="h-10 w-10 rounded-full bg-light-accent dark:bg-dark-accent" />
               <div>
