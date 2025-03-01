@@ -75,7 +75,7 @@ export default function VerifyEmail() {
         router.replace(currentAuth ? '/profile' : '/auth');
       }
     }
-  }, [state.status, auth, setAuth, router]);
+  }, [state.status, state.isAlreadyVerified, auth, setAuth, router]);
 
   // Handle verification process
   useEffect(() => {
