@@ -7,6 +7,11 @@ import { toast } from 'sonner'
 import { authService } from '@/services/auth'
 import { useAuth } from '@/contexts/AuthContext'
 
+/**
+ * GoogleCallback component handles the Google authentication process.
+ * It retrieves the authentication code from the URL, processes the login,
+ * and provides feedback to the user based on the authentication result.
+ */
 export default function GoogleCallback() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -15,12 +20,14 @@ export default function GoogleCallback() {
   useEffect(() => {
     const code = searchParams.get('code')
 
+    // Check if the authentication code is present
     if (!code) {
       toast.error('Authentication failed')
       router.push('/auth')
       return
     }
 
+    // Function to handle the Google authentication callback
     const handleCallback = async () => {
       try {
         const authResponse = await authService.googleLogin(code)
@@ -61,7 +68,7 @@ export default function GoogleCallback() {
     }
 
     handleCallback()
-  }, [])
+  }, [router, searchParams, setAuth]) // Added dependencies for useEffect
 
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background flex items-center justify-center">
