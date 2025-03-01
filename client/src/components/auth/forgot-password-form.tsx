@@ -39,8 +39,8 @@ export function ForgotPasswordForm({ onBackToSignInClick }: ForgotPasswordFormPr
       await authService.forgotPassword(email) // Call the auth service to send password reset email
       setEmailSent(true) // Update state to indicate email has been sent
       toast.success('Password reset instructions sent to your email') // Show success message
-    } catch (err: any) {
-      const message = err.response?.data?.message || 'Failed to send reset instructions' // Extract error message
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to send reset instructions' // Extract error message
       setError(message) // Set error state
       toast.error(message) // Show error message
     } finally {
