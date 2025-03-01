@@ -9,6 +9,11 @@ import Orders from '@/components/profile/Orders'
 import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
 
+/**
+ * EditForm component renders a form for editing user profile information.
+ * It includes fields for name and email, and handles form submission,
+ * cancellation, and loading states.
+ */
 const EditForm = memo(({ 
   formData, 
   onSubmit, 
@@ -75,6 +80,11 @@ const EditForm = memo(({
 
 EditForm.displayName = 'EditForm'
 
+/**
+ * ProfileContent component displays the user's profile information
+ * and allows editing of the profile. It shows either the edit form
+ * or the current profile details based on the editing state.
+ */
 const ProfileContent = memo(({ 
   auth, 
   isEditing, 
@@ -86,7 +96,7 @@ const ProfileContent = memo(({
   onChange,
   onCancel
 }: {
-  auth: any
+  auth: { name: string; email: string } // Specify the type for auth
   isEditing: boolean
   formData: { name: string; email: string }
   error: string
@@ -153,6 +163,10 @@ const ProfileContent = memo(({
 
 ProfileContent.displayName = 'ProfileContent'
 
+/**
+ * Profile component manages the user's profile state, including
+ * loading, editing, and updating profile information.
+ */
 export default function Profile() {
   const { auth, updateAuth } = useAuth()
   const router = useRouter()
@@ -183,6 +197,12 @@ export default function Profile() {
     return null
   }
 
+  /**
+   * Handles the form submission for updating the profile.
+   * It sends the updated data to the server and updates the local state.
+   * 
+   * @param e - The form event
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -198,13 +218,16 @@ export default function Profile() {
         email: data.email
       })
       setIsEditing(false)
-    } catch (err) {
+    } catch { // Changed 'err' to 'error' and specified the type
       setError('Failed to update profile. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
+  /**
+   * Cancels the editing process and resets the form data to the current auth values.
+   */
   const handleCancel = () => {
     setFormData({
       name: auth.name,
@@ -214,6 +237,11 @@ export default function Profile() {
     setError('')
   }
 
+  /**
+   * Handles input changes in the form and updates the form data state.
+   * 
+   * @param e - The change event from the input
+   */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
