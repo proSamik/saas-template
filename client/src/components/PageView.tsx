@@ -4,6 +4,11 @@ import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { authService } from '@/services/auth';
 
+/**
+ * PageView component tracks page views for analytics purposes.
+ * It sends the current pathname and search parameters to the server
+ * whenever the user navigates to a new page that hasn't been tracked yet.
+ */
 export default function PageView() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -19,6 +24,10 @@ export default function PageView() {
       return;
     }
 
+    /**
+     * Tracks the page view by sending the full path and other relevant
+     * information to the analytics server.
+     */
     const trackPageView = async () => {
       try {
         // Add to tracked paths before making the request
@@ -41,10 +50,13 @@ export default function PageView() {
 
     trackPageView();
 
+    // Store the current trackedPaths in a variable for cleanup
+    const currentTrackedPaths = trackedPaths.current;
+
     // Cleanup function to remove the path from tracked set when component unmounts
     // or when pathname/searchParams change
     return () => {
-      trackedPaths.current.delete(fullPath);
+      currentTrackedPaths.delete(fullPath);
     };
   }, [pathname, searchParams]);
 
