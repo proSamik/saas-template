@@ -1,29 +1,27 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { SocialButton } from '@/components/ui/social-button'
-import { authService } from '@/services/auth'
-import { useAuth } from '@/contexts/AuthContext'
 
 export function GithubAuth() {
-  const router = useRouter()
+  // State to manage loading status
   const [isLoading, setIsLoading] = useState(false)
-  const { setAuth } = useAuth()
 
+  // Function to handle GitHub sign-in
   const handleGithubSignIn = async () => {
-    setIsLoading(true)
+    setIsLoading(true) // Set loading state to true
     try {
       const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID!
       const redirectUri = process.env.NEXT_PUBLIC_GITHUB_REDIRECT_URI || 'http://localhost:3000/callback/github'
       const scope = 'read:user user:email'
       
+      // Construct the GitHub authorization URL
       const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`
-      window.location.href = authUrl
-    } catch (error: any) {
-      setIsLoading(false)
-      toast.error('Failed to initialize GitHub Sign-In')
+      window.location.href = authUrl // Redirect to GitHub for authentication
+    } catch {
+      setIsLoading(false) // Reset loading state on error
+      toast.error('Failed to initialize GitHub Sign-In') // Show error message
     }
   }
 
@@ -31,6 +29,7 @@ export function GithubAuth() {
     <SocialButton
       provider="github"
       onClick={handleGithubSignIn}
+      disabled={isLoading} // Disable button while loading
       icon={
         <svg className="h-5 w-5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
           <path
