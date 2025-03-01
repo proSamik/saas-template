@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
@@ -40,8 +41,8 @@ const ManageSubscriptionButton = ({ customerId }: { customerId: number }) => {
       } else {
         setError('Failed to get billing portal URL')
       }
-    } catch (err) {
-      console.error('[Subscription] Failed to fetch billing portal:', err)
+    } catch {
+      console.error('[Subscription] Failed to fetch billing portal')
       setError('Failed to access billing portal. Please try again later.')
     } finally {
       setLoading(false)
@@ -49,29 +50,33 @@ const ManageSubscriptionButton = ({ customerId }: { customerId: number }) => {
   }
 
   return (
-    <button
-      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-      onClick={handleManageClick}
-      disabled={loading}
-    >
-      {loading ? 'Loading...' : 'Manage Subscription'}
-    </button>
+    <div>
+      <button
+        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={handleManageClick}
+        disabled={loading}
+      >
+        {loading ? 'Loading...' : 'Manage Subscription'}
+      </button>
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </div>
   )
 }
 
 export default function Subscription() {
   const { auth } = useAuth()
   const router = useRouter()
-
-  if (!auth) {
-    router.push('/auth')
-    return null
-  }
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
+    // If not authenticated, redirect to auth page
+    if (!auth) {
+      router.push('/auth')
+      return
+    }
+
     const fetchSubscription = async () => {
       try {
         const response = await authService.get<SubscriptionData[]>('/api/user/subscription')
@@ -90,7 +95,12 @@ export default function Subscription() {
     }
 
     fetchSubscription()
-  }, [])
+  }, [auth, router])
+
+  // Show nothing during redirect
+  if (!auth) {
+    return null
+  }
 
   if (loading) {
     return (
