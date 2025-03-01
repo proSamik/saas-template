@@ -138,7 +138,7 @@ api.interceptors.response.use(
 
 // Create a closure for request deduplication
 const createDedupedRequest = () => {
-  const pendingRequests = new Map<string, Promise<unknown>>();
+  const pendingRequests = new Map<string, Promise<any>>();
   let cleanupTimer: NodeJS.Timeout | null = null;
 
   const cleanup = () => {
@@ -279,7 +279,7 @@ export const authService = {
     );
   },
 
-  async checkRefreshToken(): Promise<unknown> {
+  async checkRefreshToken(): Promise<any> {
     const key = 'checkRefreshToken';
     
     return requestDeduper.execute(
@@ -328,8 +328,13 @@ export const authService = {
           const response = await api.post('/auth/verify', { token });
           console.log('[Auth] Email verification response:', response.data);
           console.log('[Auth] Email verification successful');
-        } catch {
-          console.error('[Auth] Email verification failed');
+        } catch (error: any) {
+          console.error('[Auth] Email verification failed:', {
+            status: error.response?.status,
+            data: error.response?.data,
+            error: error.message
+          });
+          throw error;
         }
       }
     );
@@ -359,7 +364,7 @@ export const authService = {
     );
   },
 
-  async get<T = unknown>(url: string): Promise<T> {
+  async get<T = any>(url: string): Promise<T> {
     const key = `get:${url}`;
     
     return requestDeduper.execute(
@@ -373,7 +378,7 @@ export const authService = {
     );
   },
 
-  async post(url: string, data: unknown) {
+  async post(url: string, data: any) {
     const key = `post:${url}:${JSON.stringify(data)}`;
     
     return requestDeduper.execute(
@@ -387,7 +392,7 @@ export const authService = {
     );
   },
 
-  async put(url: string, data: unknown) {
+  async put(url: string, data: any) {
     const key = `put:${url}:${JSON.stringify(data)}`;
     
     return requestDeduper.execute(
