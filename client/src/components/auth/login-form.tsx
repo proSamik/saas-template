@@ -9,9 +9,6 @@ import { Input } from '@/components/ui/input'
 import { authService } from '@/services/auth'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthError } from '@/components/auth/error'
-import { SocialAuth } from '@/components/auth/social-auth'
-import { GoogleAuth } from '@/components/auth/google-auth'
-import { GithubAuth } from './github-auth'
 
 interface LoginFormProps {
   onSignUpClick: () => void
@@ -91,11 +88,6 @@ export function LoginForm({ onSignUpClick, onForgotPasswordClick }: LoginFormPro
           {isLoading ? 'Signing in...' : 'Sign in'}
         </Button>
       </form>
-
-      <SocialAuth>
-        <GoogleAuth />
-        <GithubAuth />
-      </SocialAuth>
 
       <div className="text-center">
         <button
