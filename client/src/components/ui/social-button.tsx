@@ -7,7 +7,7 @@ interface SocialButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode
 }
 
-export function SocialButton({ icon, provider, children, ...props }: SocialButtonProps) {
+export function SocialButton({ icon, children, ...props }: SocialButtonProps) {
   return (
     <Button
       type="button"
