@@ -8,6 +8,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { LoginForm } from '@/components/auth/login-form'
 import { SignUpForm } from '@/components/auth/signup-form'
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
+import { SocialAuth } from '@/components/auth/social-auth'
+import { GoogleAuth } from '@/components/auth/google-auth'
+import { GithubAuth } from '@/components/auth/github-auth'
 
 type AuthView = 'login' | 'signup' | 'forgot-password'
 
@@ -61,6 +64,9 @@ export default function AuthPage() {
     return null
   }
 
+  // Don't show social auth on forgot password view
+  const showSocialAuth = view !== 'forgot-password'
+
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
       <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -105,6 +111,15 @@ export default function AuthPage() {
                 )}
               </motion.div>
             </AnimatePresence>
+            
+            {showSocialAuth && (
+              <div className="mt-6">
+                <SocialAuth dividerText={view === 'login' ? 'Or sign in with' : 'Or sign up with'}>
+                  <GoogleAuth />
+                  <GithubAuth />
+                </SocialAuth>
+              </div>
+            )}
           </div>
         </div>
       </div>
