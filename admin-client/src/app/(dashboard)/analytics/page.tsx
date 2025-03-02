@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { getUserJourney, getVisitorJourney, type PageView } from '@/lib/services/analytics';
 import Loading from '@/components/ui/loading';
 import Error from '@/components/ui/error';
