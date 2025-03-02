@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUsers } from '@/lib/services/users';
@@ -104,15 +104,7 @@ export default function UsersPage() {
   const [selectAll, setSelectAll] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchUsers();
-  }, [currentPage, search, itemsPerPage]);
-
-  useEffect(() => {
-    filterUsers();
-  }, [users, filter, sortConfig]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const response = await getUsers({
@@ -129,9 +121,9 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, itemsPerPage, search]);
 
-  const filterUsers = () => {
+  const filterUsers = useCallback(() => {
     let result = [...users];
 
     // Apply filter
@@ -162,7 +154,15 @@ export default function UsersPage() {
     }
 
     setFilteredUsers(result);
-  };
+  }, [users, filter, sortConfig]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    filterUsers();
+  }, [filterUsers]);
 
   const handleSort = (key: keyof User) => {
     setSortConfig((current) => {
