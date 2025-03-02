@@ -1,19 +1,26 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { API_URL } from '@/lib/config';
 import { getAuthToken } from './auth';
 
 export interface User {
   id: string;
-  email: string;
   name: string;
+  email: string;
   email_verified: boolean;
+  created_at: string;
+  updated_at: string;
   latest_status: string | null;
   latest_product_id: number | null;
   latest_variant_id: number | null;
   latest_subscription_id: number | null;
   latest_renewal_date: string | null;
   latest_end_date: string | null;
-  created_at: string;
-  updated_at: string;
+}
+
+export interface GetUsersParams {
+  page?: number;
+  limit?: number;
+  search?: string;
 }
 
 export interface GetUsersResponse {
@@ -27,12 +34,6 @@ const headers = () => ({
   'Authorization': `Bearer ${getAuthToken()}`,
   'Content-Type': 'application/json',
 });
-
-export interface GetUsersParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-}
 
 export const getUsers = async (params: GetUsersParams = {}): Promise<GetUsersResponse> => {
   const { page = 1, limit = 20, search = '' } = params;
@@ -55,7 +56,7 @@ export const getUsers = async (params: GetUsersParams = {}): Promise<GetUsersRes
   
   // Ensure consistent data structure
   return {
-    users: (data.users || []).map((user: any) => ({
+    users: (data.users || []).map((user: User) => ({
       ...user,
       latest_status: user.latest_status || null,
       latest_product_id: user.latest_product_id || null,
