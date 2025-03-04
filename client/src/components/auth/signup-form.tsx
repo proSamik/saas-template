@@ -121,7 +121,7 @@ export function SignUpForm({ onSignInClick }: SignUpFormProps) {
         <button
           type="button"
           onClick={onSignInClick}
-          className="text-sm font-medium text-light-accent dark:text-dark-accent hover:text-opacity-90"
+          className="text-sm font-medium text-primary hover:text-primary/90"
         >
           Already have an account? Sign in
         </button>
