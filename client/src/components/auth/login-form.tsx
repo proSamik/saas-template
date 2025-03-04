@@ -79,7 +79,7 @@ export function LoginForm({ onSignUpClick, onForgotPasswordClick }: LoginFormPro
           <button
             type="button"
             onClick={onForgotPasswordClick}
-            className="text-sm font-medium text-light-accent dark:text-dark-accent hover:text-opacity-90"
+            className="text-sm font-medium text-primary hover:text-primary/90"
           >
             Forgot your password?
           </button>
@@ -94,7 +94,7 @@ export function LoginForm({ onSignUpClick, onForgotPasswordClick }: LoginFormPro
         <button
           type="button"
           onClick={onSignUpClick}
-          className="text-sm font-medium text-light-accent dark:text-dark-accent hover:text-opacity-90"
+          className="text-sm font-medium text-primary hover:text-primary/90"
         >
           Don&apos;t have an account? Sign up
         </button>
