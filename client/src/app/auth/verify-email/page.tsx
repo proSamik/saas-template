@@ -60,19 +60,23 @@ export default function VerifyEmail() {
               ? 'Your email is already verified!' 
               : 'Email verified successfully!'
           );
+          
+          // Use window.location for more reliable navigation
           navigationTimeoutRef.current = setTimeout(() => {
-            router.replace('/profile');
+            window.location.href = '/profile';
           }, 1500);
         } else {
           toast.success('Email verified successfully! Please log in.');
+          
+          // Use window.location for more reliable navigation
           navigationTimeoutRef.current = setTimeout(() => {
-            router.replace('/auth');
+            window.location.href = '/auth';
           }, 1500);
         }
       } catch (error) {
         console.error('Navigation error:', error);
         // Fallback to immediate navigation if timeout fails
-        router.replace(currentAuth ? '/profile' : '/auth');
+        window.location.href = currentAuth ? '/profile' : '/auth';
       }
     }
   }, [state.status, state.isAlreadyVerified, auth, setAuth, router]);
