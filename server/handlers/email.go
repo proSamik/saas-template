@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
 
 type PlunkEmailRequest struct {
@@ -19,10 +18,9 @@ type PlunkEmailRequest struct {
 
 // AdminEmailRequest represents the request structure for admin to send an email
 type AdminEmailRequest struct {
-	To          string   `json:"to"`
-	Subject     string   `json:"subject"`
-	Body        string   `json:"body"`
-	Attachments []string `json:"attachments,omitempty"` // Base64 encoded files with metadata
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
 }
 
 func sendPasswordResetEmail(email, resetLink string) error {
@@ -135,47 +133,27 @@ func (h *Handler) AdminSendEmailHandler(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Email sent successfully"})
 }
 
-// sendAdminEmail sends an email using the Plunk API with optional attachments
+// sendAdminEmail sends an email using the Plunk API
 func sendAdminEmail(req AdminEmailRequest) error {
 	plunkAPIKey := os.Getenv("PLUNK_SECRET_API_KEY")
 	if plunkAPIKey == "" {
 		return fmt.Errorf("PLUNK_SECRET_API_KEY not set")
 	}
 
-	// Create a map for the request payload
-	// This approach is more flexible and can adapt to Plunk's API requirements
+	// Create the email payload
 	emailPayload := map[string]interface{}{
 		"to":      req.To,
 		"subject": req.Subject,
 		"body":    req.Body,
-	}
-
-	// Process attachments if any
-	if len(req.Attachments) > 0 {
-		attachments := make([]map[string]string, 0, len(req.Attachments))
-
-		for _, attachment := range req.Attachments {
-			// Parse the attachment data
-			parts := strings.SplitN(attachment, ":", 2)
-			if len(parts) == 2 {
-				attachments = append(attachments, map[string]string{
-					"filename": parts[0],
-					"content":  parts[1],
-					"encoding": "base64",
-				})
-			}
-		}
-
-		// Only add attachments if we have valid ones
-		if len(attachments) > 0 {
-			emailPayload["attachments"] = attachments
-		}
+		"type":    "html", // Explicitly set the type to HTML
 	}
 
 	jsonData, err := json.Marshal(emailPayload)
 	if err != nil {
 		return fmt.Errorf("error marshaling email request: %v", err)
 	}
+
+	log.Printf("Sending email payload: %s", string(jsonData))
 
 	httpReq, err := http.NewRequest("POST", "https://api.useplunk.com/v1/send", bytes.NewBuffer(jsonData))
 	if err != nil {
