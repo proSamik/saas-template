@@ -54,6 +54,7 @@ export default function VerifyEmail() {
 
       try {
         if (currentAuth) {
+          // Update auth state before navigation
           setAuth({ ...currentAuth, emailVerified: true });
           toast.success(
             state.isAlreadyVerified 
@@ -62,16 +63,20 @@ export default function VerifyEmail() {
           );
           
           // Use window.location for more reliable navigation
-          navigationTimeoutRef.current = setTimeout(() => {
+          // Store the timeout ID to clear it if needed
+          const timeoutId = setTimeout(() => {
             window.location.href = '/profile';
           }, 1500);
+          navigationTimeoutRef.current = timeoutId;
         } else {
           toast.success('Email verified successfully! Please log in.');
           
           // Use window.location for more reliable navigation
-          navigationTimeoutRef.current = setTimeout(() => {
+          // Store the timeout ID to clear it if needed
+          const timeoutId = setTimeout(() => {
             window.location.href = '/auth';
           }, 1500);
+          navigationTimeoutRef.current = timeoutId;
         }
       } catch (error) {
         console.error('Navigation error:', error);
@@ -79,7 +84,8 @@ export default function VerifyEmail() {
         window.location.href = currentAuth ? '/profile' : '/auth';
       }
     }
-  }, [state.status, state.isAlreadyVerified, auth, setAuth, router]);
+  // Remove router from dependencies since we're using window.location.href directly
+  }, [state.status, state.isAlreadyVerified, auth, setAuth]);
 
   // Handle verification process
   useEffect(() => {
@@ -94,26 +100,39 @@ export default function VerifyEmail() {
       return;
     }
 
+    // Create a flag to track if the component is mounted
+    let isMounted = true;
+
     const verifyEmail = async () => {
       if (hasAttemptedRef.current) {
         return;
       }
       hasAttemptedRef.current = true;
       
-      setState(prev => ({ ...prev, status: 'verifying', error: null }));
+      // Only update state if component is still mounted
+      if (isMounted) {
+        setState(prev => ({ ...prev, status: 'verifying', error: null }));
+      }
 
       try {
         await authService.verifyEmail(token);
-        setState(prev => ({ 
-          ...prev,
-          status: 'success',
-          error: null,
-          isAlreadyVerified: false
-        }));
+        
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setState(prev => ({ 
+            ...prev,
+            status: 'success',
+            error: null,
+            isAlreadyVerified: false
+          }));
+        }
       } catch (err: unknown) {
         const errorMessage = err instanceof Error 
           ? err.message
           : 'An unexpected error occurred during verification';
+        
+        // Only proceed if component is still mounted
+        if (!isMounted) return;
         
         if (errorMessage.includes('already used')) {
           setState(prev => ({ 
@@ -136,6 +155,11 @@ export default function VerifyEmail() {
     };
 
     verifyEmail();
+
+    // Cleanup function to prevent state updates if unmounted
+    return () => {
+      isMounted = false;
+    };
   }, [searchParams]);
 
   return (
