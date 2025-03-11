@@ -10,12 +10,11 @@ interface EmailRequest {
   to: string;
   subject: string;
   body: string;
-  attachments?: string[]; // Base64 encoded files with metadata
 }
 
 /**
  * Sends an email to a user from the admin interface
- * @param data - Email data including recipient, subject, body, and optional attachments
+ * @param data - Email data including recipient, subject, and body
  * @returns A promise that resolves to the API response
  */
 export const sendEmail = async (data: EmailRequest) => {
