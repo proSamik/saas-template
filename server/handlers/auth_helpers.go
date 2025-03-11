@@ -416,14 +416,16 @@ func trackUserSignup(email string, name string) error {
 	}
 
 	type TrackRequest struct {
-		Event string   `json:"event"`
-		Email string   `json:"email"`
-		Data  UserData `json:"data"`
+		Event     string   `json:"event"`
+		Email     string   `json:"email"`
+		Subscribed bool     `json:"subscribed"` // Added subscribed field
+		Data      UserData `json:"data"`
 	}
 
 	trackReq := TrackRequest{
-		Event: "user-signup",
-		Email: email,
+		Event:     "user-signup",
+		Email:     email,
+		Subscribed: true, // Set subscribed to true
 		Data: UserData{
 			Name: name,
 		},
