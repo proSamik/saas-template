@@ -111,6 +111,10 @@ func main() {
 	mux.HandleFunc("/admin/login", adminHandler.Login)
 	mux.Handle("/admin/users", adminMiddleware.RequireAdmin(http.HandlerFunc(adminHandler.GetUsers)))
 
+	// Add the new admin email route
+	emailHandler := &handlers.Handler{DB: db}
+	mux.Handle("/admin/send-email", adminMiddleware.RequireAdmin(http.HandlerFunc(emailHandler.AdminSendEmailHandler)))
+
 	// Admin analytics routes (protected)
 	mux.Handle("/admin/analytics/user-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetUserJourney)))
 	mux.Handle("/admin/analytics/visitor-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetVisitorJourney)))
