@@ -9,6 +9,7 @@ import Loading from '@/components/ui/loading';
 import Error from '@/components/ui/error';
 import ClientOnly from '@/components/client-only';
 import { formatDate } from '@/lib/utils/format';
+import EmailModal from '@/components/EmailModal';
 
 // Available options for records per page
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -55,36 +56,56 @@ const VerificationBadge = ({ verified }: { verified: boolean }) => (
   </span>
 );
 
-const UserDetails = ({ user }: { user: User }) => (
-  <div className="bg-gray-50 px-4 py-3 space-y-2">
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <span className="text-sm font-medium text-gray-500">User ID:</span>
-        <span className="ml-2 text-sm text-gray-900">{user.id}</span>
+const UserDetails = ({ user }: { user: User }) => {
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+
+  return (
+    <div className="mt-2 p-3 bg-gray-50 rounded border border-gray-100">
+      <h4 className="font-semibold mb-2">User Details</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>
+          <span className="text-gray-600 text-sm">ID:</span>
+          <span className="text-sm ml-2">{user.id || <NoData />}</span>
+        </div>
+        <div>
+          <span className="text-gray-600 text-sm">Email:</span>
+          <span className="text-sm ml-2">{user.email || <NoData />}</span>
+        </div>
+        <div>
+          <span className="text-gray-600 text-sm">Name:</span>
+          <span className="text-sm ml-2">
+            {user.name ? user.name : <NoData />}
+          </span>
+        </div>
+        <div>
+          <span className="text-gray-600 text-sm">Created At:</span>
+          <span className="text-sm ml-2">
+            {user.created_at ? formatDate(user.created_at) : <NoData />}
+          </span>
+        </div>
       </div>
-      <div>
-        <span className="text-sm font-medium text-gray-500">Created At:</span>
-        <span className="ml-2 text-sm text-gray-900">{formatDate(user.created_at)}</span>
+      <div className="mt-3 flex gap-2">
+        <button 
+          className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+          onClick={() => setIsEmailModalOpen(true)}
+        >
+          Send Email
+        </button>
+        <Link
+          href={`/users/${user.id}`}
+          className="px-3 py-1 bg-gray-200 text-gray-800 text-xs rounded hover:bg-gray-300"
+        >
+          View Details
+        </Link>
       </div>
-      <div>
-        <span className="text-sm font-medium text-gray-500">Subscription:</span>
-        <span className="ml-2 text-sm text-gray-900">{user.latest_status || 'No Subscription'}</span>
-      </div>
-      <div>
-        <span className="text-sm font-medium text-gray-500">Renewal Date:</span>
-        <span className="ml-2 text-sm text-gray-900">{user.latest_renewal_date ? formatDate(user.latest_renewal_date) : 'N/A'}</span>
-      </div>
-      <div>
-        <span className="text-sm font-medium text-gray-500">Product ID:</span>
-        <span className="ml-2 text-sm text-gray-900">{user.latest_product_id?.toString() || 'N/A'}</span>
-      </div>
-      <div>
-        <span className="text-sm font-medium text-gray-500">Variant ID:</span>
-        <span className="ml-2 text-sm text-gray-900">{user.latest_variant_id?.toString() || 'N/A'}</span>
-      </div>
+      <EmailModal 
+        isOpen={isEmailModalOpen} 
+        onClose={() => setIsEmailModalOpen(false)} 
+        recipientEmail={user.email || ''} 
+      />
     </div>
-  </div>
-);
+  );
+};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
