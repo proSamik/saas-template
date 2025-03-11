@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -140,44 +142,37 @@ func sendAdminEmail(req AdminEmailRequest) error {
 		return fmt.Errorf("PLUNK_SECRET_API_KEY not set")
 	}
 
-	// Prepare the request payload for Plunk API
-	// Note: This structure assumes Plunk API supports attachments
-	// Adjust based on the actual Plunk API documentation
-	type PlunkAttachment struct {
-		Content  string `json:"content"`  // Base64 encoded content
-		Filename string `json:"filename"` // Filename with extension
-	}
-
-	type PlunkEmailWithAttachments struct {
-		To          string            `json:"to"`
-		Subject     string            `json:"subject"`
-		Body        string            `json:"body"`
-		Attachments []PlunkAttachment `json:"attachments,omitempty"`
+	// Create a map for the request payload
+	// This approach is more flexible and can adapt to Plunk's API requirements
+	emailPayload := map[string]interface{}{
+		"to":      req.To,
+		"subject": req.Subject,
+		"body":    req.Body,
 	}
 
 	// Process attachments if any
-	var plunkAttachments []PlunkAttachment
-	for _, attachment := range req.Attachments {
-		// In a real implementation, you would parse the attachment data
-		// For simplicity, we're assuming each attachment string contains both filename and content
-		// This should be adjusted based on how you structure the attachment data in the frontend
-		parts := strings.SplitN(attachment, ":", 2)
-		if len(parts) == 2 {
-			plunkAttachments = append(plunkAttachments, PlunkAttachment{
-				Filename: parts[0],
-				Content:  parts[1],
-			})
+	if len(req.Attachments) > 0 {
+		attachments := make([]map[string]string, 0, len(req.Attachments))
+
+		for _, attachment := range req.Attachments {
+			// Parse the attachment data
+			parts := strings.SplitN(attachment, ":", 2)
+			if len(parts) == 2 {
+				attachments = append(attachments, map[string]string{
+					"filename": parts[0],
+					"content":  parts[1],
+					"encoding": "base64",
+				})
+			}
+		}
+
+		// Only add attachments if we have valid ones
+		if len(attachments) > 0 {
+			emailPayload["attachments"] = attachments
 		}
 	}
 
-	emailReq := PlunkEmailWithAttachments{
-		To:          req.To,
-		Subject:     req.Subject,
-		Body:        req.Body,
-		Attachments: plunkAttachments,
-	}
-
-	jsonData, err := json.Marshal(emailReq)
+	jsonData, err := json.Marshal(emailPayload)
 	if err != nil {
 		return fmt.Errorf("error marshaling email request: %v", err)
 	}
@@ -197,8 +192,12 @@ func sendAdminEmail(req AdminEmailRequest) error {
 	}
 	defer resp.Body.Close()
 
+	// Read and log the response body for debugging
+	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("Plunk API response: %s", string(respBody))
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error response from Plunk API: %d", resp.StatusCode)
+		return fmt.Errorf("error response from Plunk API: %d - %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil
