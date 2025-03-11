@@ -57,7 +57,12 @@ const EmailModal: React.FC<EmailModalProps> = ({
       reader.onload = () => {
         // Extract the base64 part from data URL
         const base64String = reader.result as string;
+        // The format is: data:application/pdf;base64,XXXX
+        // We need to extract just the base64 part after the comma
         const encodedData = base64String.split(',')[1];
+        
+        // Format: filename:base64content
+        // This format matches what the server expects
         resolve(`${file.name}:${encodedData}`);
       };
       reader.onerror = error => reject(error);
