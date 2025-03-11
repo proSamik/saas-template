@@ -3,7 +3,7 @@
  * Provides a UI for sending emails to users
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { sendEmail } from '@/lib/services/email';
 
 interface EmailModalProps {
@@ -19,55 +19,19 @@ const EmailModal: React.FC<EmailModalProps> = ({
 }) => {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form when modal opens/closes
   React.useEffect(() => {
     if (isOpen) {
       setSubject('');
       setBody('');
-      setAttachments([]);
       setErrorMessage('');
       setSuccessMessage('');
     }
   }, [isOpen]);
-
-  // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const fileArray = Array.from(e.target.files);
-      setAttachments(prev => [...prev, ...fileArray]);
-    }
-  };
-
-  // Remove a file from attachments
-  const removeAttachment = (index: number) => {
-    setAttachments(attachments.filter((_, i) => i !== index));
-  };
-
-  // Convert file to base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        // Extract the base64 part from data URL
-        const base64String = reader.result as string;
-        // The format is: data:application/pdf;base64,XXXX
-        // We need to extract just the base64 part after the comma
-        const encodedData = base64String.split(',')[1];
-        
-        // Format: filename:base64content
-        // This format matches what the server expects
-        resolve(`${file.name}:${encodedData}`);
-      };
-      reader.onerror = error => reject(error);
-    });
-  };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,16 +47,11 @@ const EmailModal: React.FC<EmailModalProps> = ({
     setErrorMessage('');
     
     try {
-      // Convert attachments to base64
-      const attachmentPromises = attachments.map(file => fileToBase64(file));
-      const base64Attachments = await Promise.all(attachmentPromises);
-      
       // Send email
       await sendEmail({
         to: recipientEmail,
         subject,
         body,
-        attachments: base64Attachments,
       });
       
       setSuccessMessage('Email sent successfully');
@@ -162,45 +121,6 @@ const EmailModal: React.FC<EmailModalProps> = ({
               placeholder="Enter your message"
               required
             />
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Attachments:
-            </label>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              multiple
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            >
-              Add Attachments
-            </button>
-            
-            {attachments.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {attachments.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between bg-gray-100 p-2 rounded">
-                    <span className="text-sm truncate">{file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
           
           {errorMessage && (
