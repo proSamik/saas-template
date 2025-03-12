@@ -3,6 +3,10 @@
 import Link from 'next/link'
 import { ArrowRightIcon } from '@heroicons/react/24/outline'
 
+/**
+ * Hero component for the landing page
+ * Contains the main call-to-action buttons that direct users to authentication flows
+ */
 export function Hero() {
   return (
     <div className="relative isolate">
@@ -28,14 +32,14 @@ export function Hero() {
           </p>
           <div className="mt-10 flex items-center justify-center gap-x-6">
             <Link
-              href="/auth/signup"
+              href="/auth?view=signup"
               className="rounded-md bg-primary-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
             >
               Get started
               <ArrowRightIcon className="ml-2 -mr-1 h-4 w-4 inline-block" />
             </Link>
             <Link
-              href="/auth"
+              href="/auth?view=login"
               className="text-sm font-semibold leading-6"
             >
               Sign in <span aria-hidden="true">→</span>
