@@ -126,6 +126,13 @@ func main() {
 	// Admin-only route to view all early access registrations
 	mux.Handle("/admin/early-access", adminMiddleware.RequireAdmin(http.HandlerFunc(earlyAccessHandler.GetAllEarlyAccessRegistrations)))
 
+	// Newsletter subscription routes - public, no authentication required
+	newsletterHandler := handlers.NewNewsletterHandler(db)
+	mux.HandleFunc("/api/newsletter/subscribe", newsletterHandler.Subscribe)
+
+	// Admin-only route to view all newsletter subscriptions
+	mux.Handle("/admin/newsletter", adminMiddleware.RequireAdmin(http.HandlerFunc(newsletterHandler.GetAllNewsletterSubscriptions)))
+
 	// Analytics routes (protected)
 	mux.Handle("/admin/analytics/user-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetUserJourney)))
 	mux.Handle("/admin/analytics/visitor-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetVisitorJourney)))
