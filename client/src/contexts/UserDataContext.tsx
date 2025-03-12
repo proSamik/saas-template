@@ -57,15 +57,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     // Check timestamp for freshness if present
     const isFresh = !data.timestamp || (Date.now() - data.timestamp) < MAX_COOKIE_AGE;
     
-    console.log('Validating user data:', { 
-      hasValidStatus, 
-      hasValidVariantId, 
-      isFresh, 
-      status: data.subscription?.status,
-      variantId: data.subscription?.variantId,
-      timestamp: data.timestamp
-    });
-    
     return hasValidStatus && hasValidVariantId && isFresh;
   }, []);
 
@@ -92,27 +83,19 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     }
     
     try {
-      console.log('Fetching directly from API, bypassing cookie');
-      
       // Call the verifyUser method directly instead of using get
       // The verifyUser method is specifically designed for this endpoint
       let subscriptionData;
       try {
         subscriptionData = await authService.verifyUser();
-        console.log('API direct subscription data (from verifyUser):', subscriptionData);
       } catch (e) {
-        console.error('Error calling verifyUser() directly:', e);
-        
         // Fallback to regular get as a backup
-        console.log('Falling back to regular get method');
         const response = await authService.get('/user/verify-user');
         subscriptionData = response;
-        console.log('API fallback response:', subscriptionData);
       }
       
       // Handle null response from API - this is a valid state, not an error
       if (subscriptionData === null) {
-        console.log('API returned null subscription data - treating as no subscription');
         // Create default userData with explicit null values but mark it as valid with timestamp
         const defaultUserData: UserData = {
           subscription: {
@@ -122,12 +105,10 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
           },
           timestamp: Date.now()
         };
-        console.log('Created default userData for null API response:', defaultUserData);
         return defaultUserData;
       }
       
       if (!subscriptionData) {
-        console.error('API returned undefined subscription data');
         return null;
       }
       
@@ -140,11 +121,8 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
         },
         timestamp: Date.now()
       };
-      
-      console.log('Created userData from API response:', newUserData);
       return newUserData;
     } catch (err) {
-      console.error('Error in direct API fetch:', err);
       return null;
     }
   }, [isAuthenticated, auth]);
@@ -171,32 +149,25 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       
       if (userDataCookie) {
         try {
-          const cookieData = JSON.parse(decodeURIComponent(userDataCookie.split('=')[1]))
-          console.log('Found cookie data:', cookieData);
+          const cookieData = JSON.parse(decodeURIComponent(userDataCookie.split('=')[1]));
           
           // Validate the cookie data - if it contains null values or is too old, don't use it
           if (isValidUserData(cookieData)) {
-            console.log('Cookie data is valid, using it');
             setUserData(cookieData)
             setLoading(false)
             return
-          } else {
-            console.log('Cookie data is invalid or stale, fetching fresh data');
           }
         } catch (e) {
-          console.error(`Error parsing userData_${userId} cookie:`, e)
+          // Handle cookie parsing error
         }
       }
 
       // Use the verifyUser method as it's specifically for this endpoint
       try {
         const subscriptionData = await authService.verifyUser();
-        console.log('API subscription data (from verifyUser):', subscriptionData);
         
         // Handle null response specifically - this is a valid state
         if (subscriptionData === null) {
-          console.log('API returned null - user has no subscription');
-          
           const newUserData: UserData = {
             subscription: {
               status: 'none',  // Use 'none' instead of null to indicate known empty state
@@ -205,8 +176,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
             },
             timestamp: Date.now()
           };
-          
-          console.log('Setting userData for null API response:', newUserData);
           setUserData(newUserData);
           
           // Store in cookie to prevent repeated API calls for users with no subscription
@@ -227,9 +196,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
           },
           timestamp: Date.now() // Add timestamp for freshness tracking
         };
-        
-        // Log what we're setting in the context
-        console.log('Setting userData to:', newUserData);
 
         setUserData(newUserData);
 
@@ -238,7 +204,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
           document.cookie = `userData_${userId}=${JSON.stringify(newUserData)}; path=/; max-age=3600; secure; samesite=strict`;
         }
       } catch (apiError) {
-        console.error('Error fetching from API:', apiError);
         throw apiError;
       }
       
@@ -247,7 +212,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
 
     } catch (err) {
       setError('Failed to fetch user data')
-      console.error('Error fetching user data:', err)
       clearUserData()
     } finally {
       setLoading(false)
@@ -268,12 +232,10 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     // Prevent too many refresh attempts
     const now = Date.now();
     if (now - lastRefreshTime.current < REFRESH_COOLDOWN) {
-      console.log('Skipping refresh - cooldown period active');
       return;
     }
     
     if (refreshAttempts.current >= MAX_REFRESH_ATTEMPTS) {
-      console.log('Maximum refresh attempts reached, waiting for manual refresh');
       setError('Too many refresh attempts. Please try again later.');
       return;
     }
@@ -281,7 +243,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
     // Update refresh tracking
     refreshAttempts.current++;
     lastRefreshTime.current = now;
-    console.log(`Force refresh attempt ${refreshAttempts.current} of ${MAX_REFRESH_ATTEMPTS}`);
     
     try {
       setLoading(true);
@@ -294,7 +255,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       
       // Directly fetch new data from API
       const freshData = await fetchDirectFromAPI();
-      console.log('Force refreshed data:', freshData);
       
       if (freshData) {
         setUserData(freshData);
@@ -309,7 +269,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       setError('Failed to force refresh user data');
-      console.error('Error in force refresh:', err);
       clearUserData();
     } finally {
       setLoading(false);
@@ -331,7 +290,6 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       refreshAttempts.current < MAX_REFRESH_ATTEMPTS && 
       Date.now() - lastRefreshTime.current > REFRESH_COOLDOWN
     ) {
-      console.log('Auto-refreshing because userData is invalid after initial load');
       forceRefreshUserData();
     }
   }, [initialLoadComplete, userData, forceRefreshUserData, isValidUserData]);
