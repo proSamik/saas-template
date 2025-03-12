@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { getUserJourney, getVisitorJourney, type PageView } from '@/lib/services/analytics';
+import { getUserJourney, getVisitorJourney, getPageViewStats, type PageView } from '@/lib/services/analytics';
 import Loading from '@/components/ui/loading';
 import Error from '@/components/ui/error';
 import { formatDate, formatDuration } from '@/lib/utils/format';
@@ -32,6 +32,7 @@ export default function AnalyticsPage() {
   const [sortBy, setSortBy] = useState<'time' | 'pages'>('time');
   const [filterIP, setFilterIP] = useState('');
   const [filterVisitorId, setFilterVisitorId] = useState('');
+  const [referrerStats, setReferrerStats] = useState<{referrer: string, count: number}[]>([]);
 
   // Calculate journey statistics
   const journeyStats = useMemo((): JourneyStats => {
@@ -131,6 +132,16 @@ export default function AnalyticsPage() {
       const data = searchType === 'user'
         ? await getUserJourney(searchId, startTime, endTime)
         : await getVisitorJourney(startTime, endTime);
+
+      // Also fetch page view stats for referrer data
+      try {
+        const stats = await getPageViewStats(startTime, endTime);
+        if (stats.referrerStats) {
+          setReferrerStats(stats.referrerStats);
+        }
+      } catch (statsErr) {
+        console.error('Error fetching page stats:', statsErr);
+      }
 
       processJourneyData(data);
     } catch (err) {
@@ -291,6 +302,59 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {/* Referrer Statistics */}
+      {referrerStats.length > 0 && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+              Referrer Statistics
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Referrer
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Count
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Percentage
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {referrerStats.sort((a, b) => b.count - a.count).map((stat, index) => {
+                    const totalViews = referrerStats.reduce((sum, item) => sum + item.count, 0);
+                    const percentage = totalViews > 0 ? (stat.count / totalViews * 100).toFixed(1) : '0';
+                    
+                    return (
+                      <tr key={index}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {stat.referrer === 'direct' || !stat.referrer ? 'Direct / Unknown' : stat.referrer}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {stat.count}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center">
+                            <span className="mr-2">{percentage}%</span>
+                            <div className="w-24 bg-gray-200 rounded-full h-2.5">
+                              <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Journey Timeline */}
       {journeyData.length > 0 ? (
         <div className="bg-white shadow rounded-lg">
@@ -344,7 +408,7 @@ export default function AnalyticsPage() {
                               </p>
                               {event.referrer && (
                                 <p className="text-sm text-gray-500">
-                                  From: <span className="text-gray-700">{event.referrer}</span>
+                                  From: <span className="text-gray-700">{event.referrer === 'direct' ? 'Direct / Unknown' : event.referrer}</span>
                                 </p>
                               )}
                               {searchType === 'visitor' && (
