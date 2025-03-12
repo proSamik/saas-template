@@ -115,6 +115,10 @@ func main() {
 	emailHandler := &handlers.Handler{DB: db}
 	mux.Handle("/admin/send-email", adminMiddleware.RequireAdmin(http.HandlerFunc(emailHandler.AdminSendEmailHandler)))
 
+	// Contact form route - public, no authentication required
+	contactHandler := handlers.NewContactHandler()
+	mux.HandleFunc("/api/contact", contactHandler.SendContactEmail)
+
 	// Admin analytics routes (protected)
 	mux.Handle("/admin/analytics/user-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetUserJourney)))
 	mux.Handle("/admin/analytics/visitor-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetVisitorJourney)))
