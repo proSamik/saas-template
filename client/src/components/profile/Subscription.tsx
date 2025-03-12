@@ -1,10 +1,10 @@
-
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
+import PricingOverlay from '@/components/overlay/PricingOverlay'
 
 interface SubscriptionData {
   id: number
@@ -69,6 +69,7 @@ export default function Subscription() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showPricing, setShowPricing] = useState(false)
 
   useEffect(() => {
     // If not authenticated, redirect to auth page
@@ -138,10 +139,16 @@ export default function Subscription() {
           <p className="text-light-muted dark:text-dark-muted">No active subscription</p>
           <button
             className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            onClick={() => window.location.href = '/pricing'}
+            onClick={() => setShowPricing(true)}
           >
             View Plans
           </button>
+          
+          {/* Pricing overlay with animation */}
+          <PricingOverlay 
+            isVisible={showPricing} 
+            onClose={() => setShowPricing(false)} 
+          />
         </div>
       </div>
     )
