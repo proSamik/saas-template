@@ -2,7 +2,7 @@
 import { Metadata } from 'next'
 import { createMetadata } from '@/lib/seo/metadata'
 import JsonLd from '@/components/seo/JsonLd'
-import LegalPageClient from './LegalPageClient'
+import LegalPageClient from '@/app/legal/LegalPageClient'
 
 // Define metadata for SEO
 export const generateMetadata = (): Metadata => {
