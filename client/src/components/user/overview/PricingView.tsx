@@ -1,35 +1,20 @@
 import { PriceCard } from '@/components/landing/PriceCard'
 import { PRICING_PLANS } from '@/lib/pricing'
 import { MockBackground } from './MockBackground'
+import { UserData } from '@/types/user'
+
+interface PricingViewProps {
+  userData?: UserData | null;
+}
 
 /**
  * Component for displaying pricing options for non-subscribers or free users
+ * @param userData Optional object containing user's subscription information
  */
-export interface PricingViewProps {
-  userData?: {
-    subscription: {
-      status: string | null
-      productId: number | null
-      variantId: number | null
-    }
-  }
-}
-
 export const PricingView = ({ userData }: PricingViewProps) => {
   return (
     <div className="relative min-h-screen">
-      {/* Debug info at the top - only shown in development */}
-      {process.env.NODE_ENV === 'development' && userData && (
-        <div className="absolute top-4 right-4 z-20">
-          <div className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded mt-2 max-w-md">
-            <p>Debug: {JSON.stringify({
-              status: userData.subscription.status,
-              productId: userData.subscription.productId,
-              variantId: userData.subscription.variantId
-            })}</p>
-          </div>
-        </div>
-      )}
+
       
       {/* Mock background */}
       <MockBackground />
