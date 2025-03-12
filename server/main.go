@@ -119,7 +119,14 @@ func main() {
 	contactHandler := handlers.NewContactHandler()
 	mux.HandleFunc("/api/contact", contactHandler.SendContactEmail)
 
-	// Admin analytics routes (protected)
+	// Early access waitlist route - public, no authentication required
+	earlyAccessHandler := handlers.NewEarlyAccessHandler(db)
+	mux.HandleFunc("/api/early-access", earlyAccessHandler.Register)
+
+	// Admin-only route to view all early access registrations
+	mux.Handle("/admin/early-access", adminMiddleware.RequireAdmin(http.HandlerFunc(earlyAccessHandler.GetAllEarlyAccessRegistrations)))
+
+	// Analytics routes (protected)
 	mux.Handle("/admin/analytics/user-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetUserJourney)))
 	mux.Handle("/admin/analytics/visitor-journey", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetVisitorJourney)))
 	mux.Handle("/admin/analytics/page-stats", adminMiddleware.RequireAdmin(http.HandlerFunc(analyticsHandler.GetPageViewStats)))
