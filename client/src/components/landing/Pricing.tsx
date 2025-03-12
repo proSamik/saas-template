@@ -1,55 +1,13 @@
 'use client';
 
 import { PriceCard } from './PriceCard';
+import { PRICING_PLANS } from '@/lib/pricing';
 
-const pricingPlans = [
-  {
-    name: 'Basic',
-    description: 'Perfect for small projects and individual developers.',
-    price: 9,
-    features: [
-      'Up to 5 projects',
-      'Basic analytics',
-      'Community support',
-      'Basic integrations'
-    ],
-    productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_1 || ''
-  },
-  {
-    name: 'Pro',
-    description: 'Ideal for growing teams and businesses.',
-    price: 29,
-    features: [
-      'Up to 15 projects',
-      'Advanced analytics',
-      'Priority support',
-      'Advanced integrations',
-      'Custom domains'
-    ],
-    popular: true,
-    productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_2 || ''
-  },
-  {
-    name: 'Enterprise',
-    description: 'For large-scale applications and organizations.',
-    price: 99,
-    features: [
-      'Unlimited projects',
-      'Enterprise analytics',
-      'Dedicated support',
-      'Custom integrations',
-      'Multiple domains',
-      'SLA guarantee'
-    ],
-    productId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_PRODUCT_ID || '',
-    variantId: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_VARIANT_ID_3 || ''
-  }
-];
-
+/**
+ * Pricing component that displays the subscription plans in a grid layout
+ * Consumes the centralized pricing data from lib/pricing.ts
+ */
 export function Pricing() {
-
   return (
     <div id="pricing" className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
       <div className="mx-auto max-w-2xl lg:text-center">
@@ -62,7 +20,7 @@ export function Pricing() {
         </p>
       </div>
       <div className="mx-auto mt-16 grid max-w-lg grid-cols-1 gap-8 md:max-w-none md:grid-cols-3">
-        {pricingPlans.map((plan) => (
+        {PRICING_PLANS.map((plan) => (
           <PriceCard
             key={plan.name}
             name={plan.name}
