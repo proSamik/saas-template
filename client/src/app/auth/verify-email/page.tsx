@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/auth';
@@ -21,7 +21,6 @@ interface VerificationState {
  */
 export default function VerifyEmail() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const { auth, setAuth } = useAuth();
   const [state, setState] = useState<VerificationState>({
     status: 'idle',
