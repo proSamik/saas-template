@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'next/navigation'
+import { Footer } from '@/components/Footer'
 
 // Define the sections content
 const sections = {
@@ -132,6 +133,7 @@ export default function LegalPageClient() {
           </div>
         </motion.div>
       </div>
+      <Footer />
     </div>
   )
 } 
