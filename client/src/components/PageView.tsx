@@ -35,6 +35,7 @@ export default function PageView() {
 
         await authService.post('/api/analytics/pageview', {
           path: fullPath,
+          referrer: document.referrer || '',
           timestamp: new Date().toISOString(),
           userAgent: navigator.userAgent,
           screenResolution: `${window.screen.width}x${window.screen.height}`,
