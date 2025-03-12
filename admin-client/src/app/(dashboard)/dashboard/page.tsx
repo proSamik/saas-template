@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getPageViewStats, type PageViewStats, type DailyStats } from '@/lib/services/analytics';
+import { getPageViewStats, type PageViewStats, type DailyStats, type ReferrerStats } from '@/lib/services/analytics';
 import Loading from '@/components/ui/loading';
 import Error from '@/components/ui/error';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [pageStats, setPageStats] = useState<PageViewStats[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
+  const [referrerStats, setReferrerStats] = useState<ReferrerStats[]>([]);
   const [totalViews, setTotalViews] = useState(0);
   const [uniquePaths, setUniquePaths] = useState(0);
   const [selectedRange, setSelectedRange] = useState<number>(7);
@@ -62,6 +63,7 @@ export default function DashboardPage() {
       // Validate and set data with defaults
       setPageStats(data?.pageStats || []);
       setDailyStats(data?.dailyStats || []);
+      setReferrerStats(data?.referrerStats || []);
       setTotalViews(data?.totalViews || 0);
       setUniquePaths(data?.uniquePaths || 0);
     } catch (err) {
@@ -181,6 +183,64 @@ export default function DashboardPage() {
         </div>
       ) : (
         <EmptyState message="No daily traffic data available for the selected time period." />
+      )}
+
+      {/* Referrer Statistics */}
+      {referrerStats.length > 0 ? (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+              Traffic Sources (Last {selectedRange} Days)
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Referrer
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Views
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Percentage
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {referrerStats
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 10) // Show top 10 referrers
+                    .map((stat, index) => {
+                      const totalViews = referrerStats.reduce((sum, item) => sum + item.count, 0);
+                      const percentage = totalViews > 0 ? (stat.count / totalViews * 100).toFixed(1) : '0';
+                      
+                      return (
+                        <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {stat.referrer === 'direct' || !stat.referrer ? 'Direct / Unknown' : stat.referrer}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {stat.count.toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <span className="mr-2">{percentage}%</span>
+                              <div className="w-24 bg-gray-200 rounded-full h-2.5">
+                                <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <EmptyState message="No referrer data available for the selected time period." />
       )}
 
       {/* Popular Pages Graph */}
