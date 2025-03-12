@@ -6,10 +6,15 @@ import { useUserData } from '@/contexts/UserDataContext'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
+/**
+ * Content component for the user layout that handles authentication logic
+ * and data loading states
+ */
 function UserLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { userData, loading } = useUserData()
 
+  // Redirect unauthenticated users
   useEffect(() => {
     if (!loading && !userData) {
       router.replace('/profile')
@@ -39,6 +44,11 @@ function UserLayoutContent({ children }: { children: React.ReactNode }) {
   )
 }
 
+/**
+ * User layout wrapper that provides authentication and user data context
+ * Note: This is a client component due to authentication requirements,
+ * so SEO metadata must be defined in individual page components.
+ */
 export default function UserLayout({
   children,
 }: {
