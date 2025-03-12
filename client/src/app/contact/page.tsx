@@ -2,6 +2,19 @@
 
 import { useState } from 'react'
 import { Footer } from '@/components/Footer'
+import { Metadata } from 'next'
+import { createMetadata } from '@/lib/seo/metadata'
+import { JsonLd } from '@/components/seo/JsonLd'
+
+/**
+ * SEO metadata for the Contact page
+ */
+export const metadata: Metadata = createMetadata({
+  title: 'Contact Us',
+  description: 'Get in touch with our team for support, inquiries, or partnership opportunities. We\'re here to help with all your software development needs.',
+  keywords: ['contact', 'support', 'help', 'customer service', 'inquiry'],
+  type: 'website',
+})
 
 /**
  * Contact page component with contact form and company information
@@ -13,6 +26,28 @@ export default function Contact() {
     subject: 'General Inquiry',
     message: ''
   })
+
+  // Contact page structured data
+  const contactPageData = {
+    '@type': 'ContactPage',
+    name: 'Contact Us',
+    description: 'Get in touch with our team',
+    mainEntity: {
+      '@type': 'Organization',
+      name: 'Your Company Name',
+      telephone: '+1-800-123-4567',
+      email: 'contact@example.com',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: '123 Tech Street',
+        addressLocality: 'San Francisco',
+        addressRegion: 'CA',
+        postalCode: '94105',
+        addressCountry: 'US'
+      },
+      openingHours: 'Mo-Fr 09:00-18:00'
+    }
+  }
 
   /**
    * Handles the form submission event.
@@ -30,6 +65,8 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
+      {/* Add structured data for contact page */}
+      <JsonLd data={contactPageData} />
 
       <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
