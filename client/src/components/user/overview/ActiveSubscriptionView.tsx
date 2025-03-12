@@ -1,19 +1,15 @@
 import { Card } from '@/components/ui/card'
 import { getPlanName, getStatusColor } from '@/lib/pricing'
+import { UserData } from '@/types/user'
+
+interface ActiveSubscriptionViewProps {
+  userData: UserData;
+}
 
 /**
  * Component for displaying subscription details of an active subscriber
+ * @param userData Object containing subscription information including status, variantId
  */
-export interface ActiveSubscriptionViewProps {
-  userData: {
-    subscription: {
-      status: string | null
-      productId: number | null
-      variantId: number | null
-    }
-  }
-}
-
 export const ActiveSubscriptionView = ({ userData }: ActiveSubscriptionViewProps) => {
   const planName = getPlanName(userData?.subscription?.variantId || null)
   const statusColor = getStatusColor(userData?.subscription?.status)
