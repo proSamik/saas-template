@@ -67,9 +67,15 @@ export interface DailyStats {
   views: number;
 }
 
+export interface ReferrerStats {
+  referrer: string;
+  count: number;
+}
+
 export interface AnalyticsResponse {
   pageStats: PageViewStats[];
   dailyStats: DailyStats[];
+  referrerStats: ReferrerStats[];
   totalViews: number;
   uniquePaths: number;
 }
