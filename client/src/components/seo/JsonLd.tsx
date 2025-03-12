@@ -8,8 +8,11 @@
 import React from 'react';
 import { structuredDataString } from '@/lib/seo/metadata';
 
+// Create a specific type for structured data objects
+type StructuredData = Record<string, unknown>;
+
 interface JsonLdProps {
-  data: Record<string, any>;
+  data: StructuredData;
 }
 
 /**
@@ -89,7 +92,7 @@ export const ProductJsonLd: React.FC<{
   reviewCount?: number;
   ratingValue?: number;
 }> = (props) => {
-  const productData: Record<string, any> = {
+  const productData: StructuredData = {
     '@type': 'Product',
     name: props.name,
     description: props.description,
