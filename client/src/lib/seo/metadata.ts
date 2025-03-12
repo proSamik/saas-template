@@ -26,6 +26,9 @@ const defaultOgImage = {
   alt: baseSeoConfig.siteName,
 };
 
+// Define a specific type for structured data to replace 'any'
+type StructuredData = Record<string, unknown>;
+
 /**
  * Types for SEO metadata parameters
  */
@@ -45,7 +48,7 @@ export interface SeoProps {
   type?: 'website' | 'article' | 'product' | 'profile' | 'book';
   publishedTime?: string; // ISO date string for articles
   authors?: string[];
-  structuredData?: Record<string, any>; // JSON-LD structured data
+  structuredData?: StructuredData; // JSON-LD structured data
 }
 
 /**
@@ -74,7 +77,7 @@ export const getCanonicalUrl = (path?: string): string => {
  * @param data Structured data object
  * @returns Structured data as a string
  */
-export const structuredDataString = (data: Record<string, any>): string => {
+export const structuredDataString = (data: StructuredData): string => {
   return JSON.stringify({
     '@context': 'https://schema.org',
     ...data,
@@ -128,7 +131,7 @@ export const createMetadata = (props: SeoProps): Metadata => {
         },
       ],
       locale,
-      type,
+      type: type === 'product' ? 'website' : type,
     },
     
     // Twitter
@@ -153,7 +156,7 @@ export const createMetadata = (props: SeoProps): Metadata => {
 
   // Add article-specific metadata
   if (type === 'article') {
-    const articleMetadata = metadata.openGraph as any;
+    const articleMetadata = metadata.openGraph as Record<string, unknown>;
     if (publishedTime) {
       articleMetadata.publishedTime = publishedTime;
     }
@@ -250,7 +253,29 @@ export const createProductStructuredData = ({
   reviewCount?: number;
   ratingValue?: number;
 }) => {
-  const productData: Record<string, any> = {
+  const productData: {
+    '@type': 'Product';
+    name: string;
+    description: string;
+    image: string;
+    offers: {
+      '@type': 'Offer';
+      price: number;
+      priceCurrency: string;
+      availability: string;
+      url: string;
+    };
+    sku?: string;
+    brand?: {
+      '@type': 'Brand';
+      name: string;
+    };
+    aggregateRating?: {
+      '@type': 'AggregateRating';
+      ratingValue: number;
+      reviewCount: number;
+    };
+  } = {
     '@type': 'Product',
     name,
     description,
@@ -302,7 +327,8 @@ export const createBreadcrumbStructuredData = (
   };
 };
 
-export default {
+// Create a named object for the default export
+const seoMetadataUtils = {
   createMetadata,
   getFullTitle,
   getCanonicalUrl,
@@ -310,4 +336,6 @@ export default {
   createProductStructuredData,
   createBreadcrumbStructuredData,
   structuredDataString,
-}; 
+};
+
+export default seoMetadataUtils; 
