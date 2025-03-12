@@ -1,13 +1,35 @@
-'use client'
-
 import { Footer } from '@/components/Footer'
+import { Metadata } from 'next'
+import { createMetadata } from '@/lib/seo/metadata'
+import { JsonLd } from '@/components/seo/JsonLd'
+
+/**
+ * SEO metadata for the About page
+ */
+export const metadata: Metadata = createMetadata({
+  title: 'About Us',
+  description: 'Learn about our mission, values, and the team behind our software development tools and services that streamline workflow and enhance productivity.',
+  keywords: ['about us', 'company values', 'mission', 'team', 'software development'],
+  type: 'website',
+})
 
 /**
  * About page component that displays company information
  */
 export default function About() {
+  // Organization data for structured data
+  const organizationData = {
+    '@type': 'Organization',
+    name: 'Your Company Name',
+    url: process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com',
+    logo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com'}/logo.png`,
+    description: 'We\'re building the future of software development with modern tools and infrastructure.',
+  }
+
   return (
     <div className="min-h-screen bg-light-background dark:bg-dark-background">
+      {/* Structured data for the organization */}
+      <JsonLd data={organizationData} />
 
       <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
