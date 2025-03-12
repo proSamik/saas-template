@@ -6,7 +6,6 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 import { AuthProvider } from '@/contexts/AuthContext'
 import Navigation from '@/components/Navigation'
 import PageView from '@/components/PageView'
-import { createMetadata } from '@/lib/seo/metadata'
 import JsonLd from '@/components/seo/JsonLd'
 
 const inter = Inter({ subsets: ['latin'] })
