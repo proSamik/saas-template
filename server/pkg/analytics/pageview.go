@@ -30,12 +30,19 @@ type DailyStats struct {
 	Views int    `json:"views"`
 }
 
+// ReferrerStats represents count of visits from each referrer
+type ReferrerStats struct {
+	Referrer string `json:"referrer"`
+	Count    int    `json:"count"`
+}
+
 // PageViewResponse represents the complete analytics response
 type PageViewResponse struct {
-	PageStats   []PageViewStats `json:"pageStats"`
-	DailyStats  []DailyStats    `json:"dailyStats"`
-	TotalViews  int             `json:"totalViews"`
-	UniquePaths int             `json:"uniquePaths"`
+	PageStats     []PageViewStats `json:"pageStats"`
+	DailyStats    []DailyStats    `json:"dailyStats"`
+	ReferrerStats []ReferrerStats `json:"referrerStats"`
+	TotalViews    int             `json:"totalViews"`
+	UniquePaths   int             `json:"uniquePaths"`
 }
 
 // PageViewService defines the interface for page view analytics

@@ -138,6 +138,33 @@ func (db *DB) GetPageViewStats(startTime, endTime time.Time) (*analytics.PageVie
 		dailyStats = append(dailyStats, stat)
 	}
 
+	// Get referrer stats
+	referrerStatsQuery := `
+		SELECT 
+			COALESCE(referrer, 'direct') as referrer,
+			COUNT(*) as count
+		FROM page_views
+		WHERE created_at BETWEEN $1 AND $2
+		GROUP BY COALESCE(referrer, 'direct')
+		ORDER BY count DESC
+	`
+
+	referrerStatsRows, err := db.Query(referrerStatsQuery, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+	defer referrerStatsRows.Close()
+
+	var referrerStats []analytics.ReferrerStats
+	for referrerStatsRows.Next() {
+		var stat analytics.ReferrerStats
+		err := referrerStatsRows.Scan(&stat.Referrer, &stat.Count)
+		if err != nil {
+			return nil, err
+		}
+		referrerStats = append(referrerStats, stat)
+	}
+
 	// Get total views and unique paths
 	totalsQuery := `
 		SELECT 
@@ -154,9 +181,10 @@ func (db *DB) GetPageViewStats(startTime, endTime time.Time) (*analytics.PageVie
 	}
 
 	return &analytics.PageViewResponse{
-		PageStats:   pageStats,
-		DailyStats:  dailyStats,
-		TotalViews:  totalViews,
-		UniquePaths: uniquePaths,
+		PageStats:     pageStats,
+		DailyStats:    dailyStats,
+		ReferrerStats: referrerStats,
+		TotalViews:    totalViews,
+		UniquePaths:   uniquePaths,
 	}, nil
 }
