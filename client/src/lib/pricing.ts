@@ -96,9 +96,27 @@ export const getStatusColor = (status: string | null | undefined): string => {
  * @param userData The user data object
  * @returns Boolean indicating if the user has an active subscription
  */
-export const hasActiveSubscription = (userData: any): boolean => {
-  return (
-    userData?.subscription?.status?.toLowerCase() === 'active' &&
-    userData?.subscription?.variantId
-  );
+export const hasActiveSubscription = (userData: { subscription?: { status?: string; variantId?: string | number } }): boolean => {
+  // Debug the input to see what's being received
+  console.log('hasActiveSubscription received:', userData);
+  
+  // Check for required properties with explicit null handling
+  const status = userData?.subscription?.status;
+  const variantId = userData?.subscription?.variantId;
+  
+  console.log('Extracted status:', status, 'variantId:', variantId);
+  
+  // Explicit check for 'none' status which means no subscription
+  if (status === 'none') {
+    console.log('Status is "none", user has no subscription');
+    return false;
+  }
+  
+  // More robust check for active status
+  const isActive = status?.toLowerCase() === 'active';
+  const hasVariant = variantId !== undefined && variantId !== null;
+  
+  console.log('isActive:', isActive, 'hasVariant:', hasVariant);
+  
+  return isActive && hasVariant;
 } 
