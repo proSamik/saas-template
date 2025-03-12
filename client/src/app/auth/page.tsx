@@ -1,128 +1,41 @@
-'use client'
+// Auth page (Server Component)
+import { Metadata } from 'next'
+import { createMetadata } from '@/lib/seo/metadata'
+import JsonLd from '@/components/seo/JsonLd'
+import AuthPageClient from '@/app/auth/AuthPageClient'
 
-import { useState, useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-
-import { LoginForm } from '@/components/auth/login-form'
-import { SignUpForm } from '@/components/auth/signup-form'
-import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
-import { SocialAuth } from '@/components/auth/social-auth'
-import { GoogleAuth } from '@/components/auth/google-auth'
-import { GithubAuth } from '@/components/auth/github-auth'
-
-type AuthView = 'login' | 'signup' | 'forgot-password'
-
-const slideVariants = {
-  enter: (direction: number) => ({
-    x: direction > 0 ? 1000 : -1000,
-    opacity: 0
-  }),
-  center: {
-    zIndex: 1,
-    x: 0,
-    opacity: 1
-  },
-  exit: (direction: number) => ({
-    zIndex: 0,
-    x: direction < 0 ? 1000 : -1000,
-    opacity: 0
+// Define metadata for SEO
+export const generateMetadata = (): Metadata => {
+  return createMetadata({
+    title: 'Sign In or Create an Account',
+    description: 'Sign in to your account or create a new one to access our platform features and services.',
+    keywords: ['login', 'sign up', 'authentication', 'user account', 'password reset'],
+    type: 'website',
+    noIndex: true, // We don't want search engines to index authentication pages
   })
 }
 
+// Define structured data for the auth page
+const authPageData = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Authentication',
+  description: 'Sign in or create an account',
+  publisher: {
+    '@type': 'Organization',
+    name: 'SaaS Platform',
+    url: process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com'
+  }
+}
+
 export default function AuthPage() {
-  const router = useRouter()
-  const { isAuthenticated } = useAuth()
-  const searchParams = useSearchParams()
-  const [isLoading, setIsLoading] = useState(true)
-  
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/profile')
-    } else {
-      setIsLoading(false)
-    }
-  }, [isAuthenticated, router])
-
-  const [view, setView] = useState<AuthView>(
-    (searchParams.get('view') as AuthView) || 'login'
-  )
-  const [[page, direction], setPage] = useState([0, 0])
-
-  const paginate = (newView: AuthView) => {
-    const views: AuthView[] = ['login', 'signup', 'forgot-password']
-    const currentIndex = views.indexOf(view)
-    const newIndex = views.indexOf(newView)
-    const direction = newIndex > currentIndex ? 1 : -1
-    
-    setPage([page + direction, direction])
-    setView(newView)
-  }
-
-  if (isLoading || isAuthenticated) {
-    return null
-  }
-
-  // Don't show social auth on forgot password view
-  const showSocialAuth = view !== 'forgot-password'
-
   return (
-    <div className="min-h-screen bg-light-background dark:bg-dark-background">
-      <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-light-foreground dark:text-dark-foreground">
-            {view === 'login' && 'Sign in to your account'}
-            {view === 'signup' && 'Create your account'}
-            {view === 'forgot-password' && 'Reset your password'}
-          </h2>
-        </div>
-
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-light-card dark:bg-dark-card px-4 py-8 shadow sm:rounded-lg sm:px-10">
-            <AnimatePresence mode="wait" custom={direction}>
-              <motion.div
-                key={view}
-                custom={direction}
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{
-                  x: { type: "spring", stiffness: 300, damping: 30 },
-                  opacity: { duration: 0.2 }
-                }}
-              >
-                {view === 'login' && (
-                  <LoginForm
-                    onSignUpClick={() => paginate('signup')}
-                    onForgotPasswordClick={() => paginate('forgot-password')}
-                  />
-                )}
-                {view === 'signup' && (
-                  <SignUpForm
-                    onSignInClick={() => paginate('login')}
-                  />
-                )}
-                {view === 'forgot-password' && (
-                  <ForgotPasswordForm
-                    onBackToSignInClick={() => paginate('login')}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
-            
-            {showSocialAuth && (
-              <div className="mt-6">
-                <SocialAuth dividerText={view === 'login' ? 'Or sign in with' : 'Or sign up with'}>
-                  <GoogleAuth />
-                  <GithubAuth />
-                </SocialAuth>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <>
+      {/* Add structured data */}
+      <JsonLd data={authPageData} />
+      
+      {/* Client component for interactivity */}
+      <AuthPageClient />
+    </>
   )
 } 
