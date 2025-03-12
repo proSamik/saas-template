@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { authService } from '@/services/auth'
 import { useRouter } from 'next/navigation'
+import PricingOverlay from '@/components/overlay/PricingOverlay'
 
 interface OrderData {
   id: number
@@ -26,6 +27,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<OrderData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showPricing, setShowPricing] = useState(false)
 
   useEffect(() => {
     // If not authenticated, redirect to auth page
@@ -92,6 +94,18 @@ export default function Orders() {
         </h3>
         <div className="rounded-lg bg-light-card dark:bg-dark-card p-6 shadow-sm">
           <p className="text-light-muted dark:text-dark-muted">No orders found</p>
+          <button
+            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            onClick={() => setShowPricing(true)}
+          >
+            View Plans
+          </button>
+          
+          {/* Pricing overlay with animation */}
+          <PricingOverlay 
+            isVisible={showPricing} 
+            onClose={() => setShowPricing(false)} 
+          />
         </div>
       </div>
     )
@@ -155,6 +169,24 @@ export default function Orders() {
           ))}
         </div>
       </div>
+      
+      {/* Button to view more plans even when there are orders */}
+      <div className="flex justify-end">
+        <button
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          onClick={() => setShowPricing(true)}
+        >
+          View More Plans
+        </button>
+      </div>
+      
+      {/* Pricing overlay with animation */}
+      <PricingOverlay 
+        isVisible={showPricing} 
+        onClose={() => setShowPricing(false)}
+        title="Explore More Plans"
+        description="Looking for more options? Check out our subscription plans below."
+      />
     </div>
   )
 }
