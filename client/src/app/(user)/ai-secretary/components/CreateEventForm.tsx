@@ -92,7 +92,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
       description: '',
       startTime: '',
       endTime: '',
-      taskId: undefined,
+      taskId: 'none',
       isAllDay: false,
     },
   })
@@ -112,7 +112,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
       if (values.description) formData.append('description', values.description as string)
       formData.append('startTime', values.startTime as string)
       formData.append('endTime', values.endTime as string)
-      if (values.taskId) formData.append('taskId', values.taskId as string)
+      if (values.taskId && values.taskId !== 'none') formData.append('taskId', values.taskId as string)
       formData.append('isAllDay', values.isAllDay ? 'true' : 'false')
       
       // Call server action
@@ -134,16 +134,16 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
   const incompleteTasks = tasks.filter(task => !task.isCompleted)
   
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen} >
       <DialogTrigger asChild>
         <Button variant="outline">
           <CalendarPlus className="h-4 w-4 mr-2" />
           Add Event
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-white dark:bg-background dark:text-white">
         <DialogHeader>
-          <DialogTitle className='text-foreground'>Create Calendar Event</DialogTitle>
+          <DialogTitle className='text-black dark:text-white'>Create Calendar Event</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
@@ -154,7 +154,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="title"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Title</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Title</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input placeholder="Event title" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
@@ -169,7 +169,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="description"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Description</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Description</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Textarea placeholder="Event description" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
@@ -191,8 +191,8 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel className='text-foreground'>All day event</FormLabel>
-                    <p className="text-sm text-foreground">
+                    <FormLabel className='text-black dark:text-white'>All day event</FormLabel>
+                    <p className="text-sm text-black dark:text-white">
                       Check if this event lasts all day
                     </p>
                   </div>
@@ -206,7 +206,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="startTime"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Start Time</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Start Time</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input 
                       type="datetime-local" 
@@ -224,7 +224,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="endTime"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>End Time</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>End Time</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input 
                       type="datetime-local" 
@@ -242,7 +242,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="taskId"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Associated Task (Optional)</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Associated Task (Optional)</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
                     value={field.value}
@@ -253,7 +253,7 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {incompleteTasks.map(task => (
                         <SelectItem key={task.id} value={task.id.toString()}>
                           {task.title}
@@ -268,9 +268,9 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
             
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" type="button" className='text-foreground'>Cancel</Button>
+                <Button variant="outline" type="button" className='text-black dark:text-white'>Cancel</Button>
               </DialogClose>
-              <Button type="submit" disabled={loading} className='text-foreground'>
+              <Button type="submit" disabled={loading} className='text-black dark:text-white'>
                 {loading ? 'Creating...' : 'Create Event'}
               </Button>
             </DialogFooter>
