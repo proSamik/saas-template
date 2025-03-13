@@ -13,17 +13,50 @@ import { tasks, calendarEvents } from '../db/schema';
  */
 export async function analyzeTasksAction(userId: string, input: string) {
   try {
-    // Get AI analysis
+    console.log(`Starting AI analysis for user ${userId} with input: ${input.substring(0, 100)}...`);
+    
+    if (!userId) {
+      console.error('analyzeTasksAction called without a userId');
+      throw new Error('User ID is required for task analysis');
+    }
+    
+    if (!input || input.trim().length === 0) {
+      console.error('analyzeTasksAction called with empty input');
+      throw new Error('Input text is required for task analysis');
+    }
+    
+    // Get AI analysis - this now has better error handling internally
     const aiAnalysis = await analyzeTasksWithAI(input);
     
-    // Store the recommendation
-    const newRecommendation = await aiRecommendationQueries.create(userId, aiAnalysis, input);
-    
-    revalidatePath('/ai-secretary');
-    return { recommendation: aiAnalysis, id: newRecommendation[0]?.id };
+    // Only store the recommendation if we got a valid analysis from the AI
+    if (aiAnalysis && !aiAnalysis.includes('failed') && !aiAnalysis.includes('error')) {
+      try {
+        // Store the recommendation
+        const newRecommendation = await aiRecommendationQueries.create(userId, aiAnalysis, input);
+        console.log('Successfully stored AI recommendation:', newRecommendation[0]?.id);
+        
+        revalidatePath('/ai-secretary');
+        return { recommendation: aiAnalysis, id: newRecommendation[0]?.id };
+      } catch (dbError) {
+        console.error('Error storing AI recommendation in database:', dbError);
+        // Return the analysis even if storing failed
+        return { recommendation: aiAnalysis, id: 0 };
+      }
+    } else {
+      // If the AI returned an error message, just return it without trying to store in DB
+      console.log('AI returned an error or warning message:', aiAnalysis);
+      return { recommendation: aiAnalysis, id: 0 };
+    }
   } catch (error) {
+    // Detailed error logging
     console.error('Error analyzing tasks with AI:', error);
-    throw new Error('Failed to analyze tasks with AI');
+    
+    // Return a user-friendly error that won't crash the server
+    return { 
+      recommendation: 'Sorry, there was an error analyzing your tasks. Please try again later or contact support if the issue persists.', 
+      id: 0,
+      error: true
+    };
   }
 }
 
