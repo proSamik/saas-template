@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card' // Removed unused imports
 import { AIRecommendation, Task } from '@/types/ai-secretary'
-import { markRecommendationApplied, createTasksFromRecommendation } from '@/lib/user/actions/ai-actions'
-import { CheckCircle, Clock, Sparkles, Plus, ListTodo } from 'lucide-react'
+import { markRecommendationAppliedAction, createTasksFromRecommendationAction } from '@/lib/user/actions/ai-actions'
+import { CheckCircle, Clock, Sparkles, ListTodo } from 'lucide-react'
 import { toast } from 'sonner'
 
 /**
@@ -56,7 +56,7 @@ export default function AIRecommendationsList({
     
     try {
       setLoadingId(recommendationId)
-      await markRecommendationApplied(userId, recommendationId)
+      await markRecommendationAppliedAction(userId, recommendationId)
       onRecommendationMarkedApplied(recommendationId)
       toast.success('Recommendation marked as applied')
     } catch (error) {
@@ -76,7 +76,7 @@ export default function AIRecommendationsList({
     
     try {
       setCreatingTasksId(recommendation.id)
-      const tasks = await createTasksFromRecommendation(
+      const tasks = await createTasksFromRecommendationAction(
         userId, 
         recommendation.id, 
         recommendation.recommendation
