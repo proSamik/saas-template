@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getTasks } from '@/lib/user/actions/task-actions'
 import { getCalendarEvents } from '@/lib/user/actions/calendar-actions'
-import { getAIRecommendations } from '@/lib/user/actions/ai-actions'
+import { getAIRecommendationsAction } from '@/lib/user/actions/ai-actions'
 import { Task, CalendarEvent, AIRecommendation } from '@/types/ai-secretary'
 import TaskBoard from './components/TaskBoard'
 import CalendarView from './components/CalendarView'
@@ -47,57 +47,70 @@ export default function AISecretaryPage() {
     const loadUserData = async () => {
       console.log('loadUserData called with userId:', userId)
       
-      if (userId) {
-        try {
-          setLoading(true)
-          setError(null)
-          console.log('Starting to fetch data...')
-          
-          // Fetch tasks and events, which are essential
-          try {
-            const [taskData, eventData] = await Promise.all([
-              getTasks(userId).catch(e => {
-                console.error('Error fetching tasks:', e)
-                return []
-              }),
-              getCalendarEvents(userId).catch(e => {
-                console.error('Error fetching events:', e)
-                return []
-              })
-            ])
-            
-            console.log('Data fetched:', { taskData, eventData })
-            setTasks(taskData)
-            setEvents(eventData)
-          } catch (dataError) {
-            console.error('Error loading essential data:', dataError)
-            toast.error('Failed to load tasks and events')
-          }
-          
-          // Fetch recommendations separately so that failures don't block the UI
-          setLoadingRecommendations(true)
-          try {
-            const recData = await getAIRecommendations(userId)
-            console.log('Recommendations fetched:', { recData })
-            setRecommendations(recData || [])
-          } catch (recError) {
-            console.error('Error loading recommendations:', recError)
-            // Don't show a toast for this since it's not critical
-          } finally {
-            setLoadingRecommendations(false)
-          }
-        } catch (error) {
-          console.error('Error loading user data:', error)
-          setError('Failed to load data. Please try refreshing the page.')
-        } finally {
-          console.log('Setting loading to false')
-          setLoading(false)
-        }
-      } else {
-        // If no userId is available after a reasonable time, stop loading
+      if (!userId) {
         console.log('No userId available, stopping loading')
         setLoading(false)
         setLoadingRecommendations(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+        console.log('Starting to fetch data...')
+        
+        // Initialize with empty arrays for tasks and events
+        let taskData: Task[] = []
+        let eventData: CalendarEvent[] = []
+        
+        // Fetch tasks and events, which are essential
+        try {
+          const [tasksResult, eventsResult] = await Promise.all([
+            getTasks(userId).catch(e => {
+              console.error('Error fetching tasks:', e)
+              return []
+            }),
+            getCalendarEvents(userId).catch(e => {
+              console.error('Error fetching events:', e)
+              return []
+            })
+          ])
+          
+          taskData = tasksResult || []
+          eventData = eventsResult || []
+          
+          console.log('Data fetched:', { taskData, eventData })
+        } catch (dataError) {
+          console.error('Error loading essential data:', dataError)
+          // Don't show error toast for initial load
+          // Just continue with empty arrays
+        }
+        
+        // Set the data even if empty
+        setTasks(taskData)
+        setEvents(eventData)
+        
+        // Fetch recommendations separately
+        setLoadingRecommendations(true)
+        try {
+          const recData = await getAIRecommendationsAction(userId)
+          console.log('Recommendations fetched:', { recData })
+          setRecommendations(recData || [])
+        } catch (recError) {
+          console.error('Error loading recommendations:', recError)
+          setRecommendations([]) // Set empty array on error
+        } finally {
+          setLoadingRecommendations(false)
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error)
+        // Only show error if we have no data at all
+        if (tasks.length === 0 && events.length === 0) {
+          setError('Failed to load data. Please try refreshing the page.')
+        }
+      } finally {
+        console.log('Setting loading to false')
+        setLoading(false)
       }
     }
     
@@ -112,7 +125,7 @@ export default function AISecretaryPage() {
     
     setLoadingRecommendations(true)
     try {
-      const recData = await getAIRecommendations(userId)
+      const recData = await getAIRecommendationsAction(userId)
       setRecommendations(recData || [])
       toast.success('Successfully loaded recommendations')
     } catch (error) {
