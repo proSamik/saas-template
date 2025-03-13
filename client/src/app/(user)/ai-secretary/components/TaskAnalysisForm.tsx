@@ -120,7 +120,7 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
           <div>
             <Textarea
               placeholder="Describe your tasks, goals, and constraints. For example: 'I need to prepare a presentation for tomorrow, finish a report by Friday, and also want to exercise 3 times this week.'"
-              className="min-h-[120px] bg-background text-foreground"
+              className="min-h-[120px] text-foreground bg-white dark:bg-transparent dark:text-white" // Added background white
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
