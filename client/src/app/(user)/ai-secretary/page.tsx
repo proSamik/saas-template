@@ -14,6 +14,7 @@ import AIRecommendationsList from './components/AIRecommendationsList'
 import TaskAnalysisForm from './components/TaskAnalysisForm'
 import CreateTaskForm from './components/CreateTaskForm'
 import CreateEventForm from './components/CreateEventForm'
+import { toast } from 'sonner'
 
 /**
  * AI Secretary Dashboard Page
@@ -26,6 +27,7 @@ export default function AISecretaryPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [activeTab, setActiveTab] = useState<string>('tasks')
   
   // Get the user ID directly from auth context
   const userId = auth?.id
@@ -83,6 +85,26 @@ export default function AISecretaryPage() {
     loadUserData()
   }, [userId])
   
+  /**
+   * Handle tasks created from AI recommendations
+   * @param newTasks - The newly created tasks
+   */
+  const handleTasksCreatedFromRecommendation = (newTasks: Task[]) => {
+    // Add the new tasks to the tasks state
+    setTasks(prevTasks => [...newTasks, ...prevTasks])
+    
+    // Switch to the tasks tab to show the newly created tasks
+    setActiveTab('tasks')
+    
+    // Show a toast notification
+    toast.success(
+      `${newTasks.length} ${newTasks.length === 1 ? 'task' : 'tasks'} created from AI recommendation`,
+      {
+        description: 'Check the Tasks tab to view and manage them'
+      }
+    )
+  }
+  
   if (loading) {
     return (
       <div className="container mx-auto py-10">
@@ -116,7 +138,12 @@ export default function AISecretaryPage() {
         />
       </div>
       
-      <Tabs defaultValue="tasks" className="w-full">
+      <Tabs 
+        defaultValue="tasks" 
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="w-full"
+      >
         <TabsList className="grid grid-cols-3 mb-8">
           <TabsTrigger value="tasks">Tasks</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
@@ -159,6 +186,7 @@ export default function AISecretaryPage() {
                 r.id === appliedRecId ? {...r, isApplied: true, appliedAt: new Date()} : r
               ))
             }}
+            onTasksCreated={handleTasksCreatedFromRecommendation}
           />
         </TabsContent>
       </Tabs>
