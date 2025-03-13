@@ -26,13 +26,36 @@ Your role is to help users apply:
 1. The Pareto Principle (80/20 rule): Focus on the 20% of tasks that yield 80% of results.
 2. The Eisenhower Matrix: Categorize tasks into four quadrants (Urgent & Important, Important Not Urgent, Urgent Not Important, Not Urgent & Not Important).
 
-Based on the user's tasks, provide:
-- Analysis of their current task portfolio
-- Identification of high-impact tasks (using 80/20 principle)
-- Categorization into the four quadrants
-- Specific, actionable recommendations for scheduling
-- Suggestions for which tasks to prioritize, delegate, or eliminate
-- Optimal calendar blocking strategies
+IMPORTANT: Format your response in the following structure:
+
+### Task Analysis
+[Brief analysis of the current situation]
+
+### High-Impact Tasks (80/20)
+[List the 20% of tasks that will yield 80% of results]
+
+### Task Categorization
+1. Urgent & Important:
+   - Task 1: [Description]
+   - Task 2: [Description]
+
+2. Important Not Urgent:
+   - Task 1: [Description]
+   - Task 2: [Description]
+
+3. Urgent Not Important:
+   - Task 1: [Description]
+   - Task 2: [Description]
+
+4. Not Urgent & Not Important:
+   - Task 1: [Description]
+   - Task 2: [Description]
+
+### Actionable Recommendations
+[Numbered list of specific actions]
+
+### Time Blocking
+[Suggested time blocks for tasks]
 
 Be concise, practical, and focus on helping the user maximize their productivity.
 `;
@@ -53,7 +76,9 @@ Be concise, practical, and focus on helping the user maximize their productivity
         { role: 'user', content: input }
       ],
       temperature: 0.7,
-      max_tokens: 1200,
+      max_tokens: 2000,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.6,
     });
 
     if (!completion.choices || completion.choices.length === 0) {
@@ -61,12 +86,20 @@ Be concise, practical, and focus on helping the user maximize their productivity
       return 'The AI analysis service returned an empty response. Please try again later.';
     }
 
-    return completion.choices[0]?.message.content || 'No analysis could be generated.';
+    const response = completion.choices[0]?.message.content;
+    if (!response) {
+      return 'No analysis could be generated.';
+    }
+
+    const formattedResponse = response.trim();
+    if (formattedResponse.length < 50) {
+      return 'The AI response was too short. Please try again with more detailed input.';
+    }
+
+    return formattedResponse;
   } catch (error) {
-    // Log detailed error information
     console.error('Error in AI task analysis:', error);
     
-    // Check for specific error types
     if (error instanceof Error) {
       const errorMessage = error.message;
       
@@ -81,9 +114,12 @@ Be concise, practical, and focus on helping the user maximize their productivity
       if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
         return 'AI analysis failed due to network issues. Please check your internet connection and try again.';
       }
+
+      if (errorMessage.includes('context_length')) {
+        return 'The input text is too long. Please try with a shorter input.';
+      }
     }
     
-    // Default error message
     return 'An error occurred while analyzing your tasks. Please try again later.';
   }
 }
