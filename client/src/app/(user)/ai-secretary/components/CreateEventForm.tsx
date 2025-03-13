@@ -141,9 +141,9 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
           Add Event
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Calendar Event</DialogTitle>
+          <DialogTitle className='text-foreground'>Create Calendar Event</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
@@ -154,9 +154,9 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="title"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Event title" {...field} />
+                  <FormLabel className='text-foreground'>Title</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
+                    <Input placeholder="Event title" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -169,9 +169,9 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="description"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Event description" {...field} />
+                  <FormLabel className='text-foreground'>Description</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
+                    <Textarea placeholder="Event description" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -191,8 +191,8 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>All day event</FormLabel>
-                    <p className="text-sm text-muted-foreground">
+                    <FormLabel className='text-foreground'>All day event</FormLabel>
+                    <p className="text-sm text-foreground">
                       Check if this event lasts all day
                     </p>
                   </div>
@@ -206,8 +206,8 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="startTime"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Start Time</FormLabel>
-                  <FormControl>
+                  <FormLabel className='text-foreground'>Start Time</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input 
                       type="datetime-local" 
                       {...field} 
@@ -224,8 +224,8 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="endTime"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>End Time</FormLabel>
-                  <FormControl>
+                  <FormLabel className='text-foreground'>End Time</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input 
                       type="datetime-local" 
                       {...field} 
@@ -242,14 +242,14 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
               name="taskId"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Associated Task (Optional)</FormLabel>
+                  <FormLabel className='text-foreground'>Associated Task (Optional)</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
                     value={field.value}
                   >
-                    <FormControl>
+                    <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a task (optional)" />
+                        <SelectValue placeholder="Select a task (optional)" className="text-gray-400 italic" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -268,9 +268,9 @@ export default function CreateEventForm({ userId, tasks, onEventCreated }: Creat
             
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" type="button">Cancel</Button>
+                <Button variant="outline" type="button" className='text-foreground'>Cancel</Button>
               </DialogClose>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading} className='text-foreground'>
                 {loading ? 'Creating...' : 'Create Event'}
               </Button>
             </DialogFooter>
