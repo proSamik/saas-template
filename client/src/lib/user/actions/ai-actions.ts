@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { analyzeTasksWithAI, generateOptimalSchedule } from '../ai/openrouter';
 import { aiRecommendationQueries, taskQueries, calendarQueries } from '../db/queries';
-import { tasks, calendarEvents } from '../db/schema';
+import { tasks, calendarEvents, priorityEnum } from '../db/schema';
+import { Task } from '@/types/ai-secretary';
 
 /**
  * Server action to analyze tasks with AI
@@ -122,5 +123,131 @@ export async function markRecommendationApplied(userId: string, recommendationId
   } catch (error) {
     console.error('Error marking recommendation as applied:', error);
     throw new Error('Failed to mark recommendation as applied');
+  }
+}
+
+/**
+ * Server action to create tasks from an AI recommendation
+ * @param userId - The authenticated user ID
+ * @param recommendationId - The ID of the recommendation to convert to tasks
+ * @param recommendationText - The text of the recommendation
+ * @returns Array of created tasks
+ */
+export async function createTasksFromRecommendation(
+  userId: string, 
+  recommendationId: number, 
+  recommendationText: string
+) {
+  try {
+    // Validate inputs
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    
+    if (!recommendationText) {
+      throw new Error('Recommendation text is required');
+    }
+    
+    // Extract task suggestions from the recommendation text
+    // This is a simple implementation - in a real app, you might want to use AI to extract structured tasks
+    const lines = recommendationText.split('\n');
+    const taskLines = lines.filter(line => 
+      (line.includes('Task:') || 
+       line.includes('Priority:') || 
+       line.trim().startsWith('•') || 
+       line.trim().startsWith('-')) && 
+      line.length > 5
+    );
+    
+    // Group related lines together
+    const taskBlocks: string[] = [];
+    let currentBlock = '';
+    
+    for (const line of taskLines) {
+      if ((line.includes('Task:') || line.trim().startsWith('•') || line.trim().startsWith('-')) && currentBlock !== '') {
+        taskBlocks.push(currentBlock);
+        currentBlock = line;
+      } else {
+        currentBlock += '\n' + line;
+      }
+    }
+    
+    if (currentBlock !== '') {
+      taskBlocks.push(currentBlock);
+    }
+    
+    // Parse blocks into tasks
+    const createdTasks: Task[] = [];
+    
+    for (const block of taskBlocks) {
+      let title = '';
+      let description = block.trim();
+      let priority: typeof priorityEnum.enumValues[number] = 'NOT_URGENT_IMPORTANT'; // Default priority
+      
+      // Try to extract task title
+      if (block.includes('Task:')) {
+        const titleMatch = block.match(/Task:\s*([^\n]+)/);
+        if (titleMatch && titleMatch[1]) {
+          title = titleMatch[1].trim();
+        }
+      } else if (block.trim().startsWith('•') || block.trim().startsWith('-')) {
+        const lines = block.trim().split('\n');
+        title = lines[0].replace(/^[•-]\s*/, '').trim();
+      }
+      
+      // Skip if we couldn't extract a title
+      if (!title) continue;
+      
+      // Try to determine priority based on text
+      if (block.toLowerCase().includes('urgent') && block.toLowerCase().includes('important')) {
+        priority = 'URGENT_IMPORTANT';
+      } else if (block.toLowerCase().includes('urgent')) {
+        priority = 'URGENT_NOT_IMPORTANT';
+      } else if (block.toLowerCase().includes('important')) {
+        priority = 'NOT_URGENT_IMPORTANT';
+      } else if (block.toLowerCase().includes('not urgent') && block.toLowerCase().includes('not important')) {
+        priority = 'NOT_URGENT_NOT_IMPORTANT';
+      }
+      
+      // Create task
+      try {
+        const taskData = {
+          title,
+          description,
+          priority,
+        };
+        
+        const newTask = await taskQueries.create(userId, taskData);
+        if (newTask && newTask[0]) {
+          createdTasks.push(newTask[0]);
+        }
+      } catch (error) {
+        console.error('Error creating task from recommendation:', error);
+        // Continue with the next task even if one fails
+      }
+    }
+    
+    // If we didn't create any tasks, create at least one general task
+    if (createdTasks.length === 0) {
+      const taskData = {
+        title: 'Task from AI recommendation',
+        description: recommendationText,
+        priority: 'NOT_URGENT_IMPORTANT' as typeof priorityEnum.enumValues[number],
+      };
+      
+      const newTask = await taskQueries.create(userId, taskData);
+      if (newTask && newTask[0]) {
+        createdTasks.push(newTask[0]);
+      }
+    }
+    
+    // Mark the recommendation as applied
+    await markRecommendationApplied(userId, recommendationId);
+    
+    revalidatePath('/ai-secretary');
+    return createdTasks;
+  } catch (error) {
+    console.error('Error creating tasks from recommendation:', error);
+    throw new Error('Failed to create tasks from recommendation');
   }
 } 
