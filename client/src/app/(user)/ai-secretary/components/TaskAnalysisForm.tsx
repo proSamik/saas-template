@@ -99,19 +99,19 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
     <Card>
       <div className="p-4">
         <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="h-5 w-5 text-blue-500" />
-          <h2 className="text-lg font-semibold">AI Task Analysis</h2>
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold ">AI Task Analysis</h2>
         </div>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           Describe your tasks and goals to get AI-powered recommendations for prioritization and scheduling
         </p>
         
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4 flex items-start gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 mb-4 flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-red-800">AI Analysis Error</p>
-              <p className="text-sm text-red-700">{error}</p>
+              <p className="text-sm font-medium text-destructive">AI Analysis Error</p>
+              <p className="text-sm text-destructive/90">{error}</p>
             </div>
           </div>
         )}
@@ -120,7 +120,7 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
           <div>
             <Textarea
               placeholder="Describe your tasks, goals, and constraints. For example: 'I need to prepare a presentation for tomorrow, finish a report by Friday, and also want to exercise 3 times this week.'"
-              className="min-h-[120px]"
+              className="min-h-[120px] bg-background text-foreground"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
