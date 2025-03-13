@@ -142,15 +142,41 @@ class TaskMCPServer implements TaskMCPInterface {
       (line.includes('Task:') || 
        line.includes('Priority:') || 
        line.trim().startsWith('•') || 
-       line.trim().startsWith('-')) && 
+       line.trim().startsWith('-') ||
+       line.trim().startsWith('1.') ||
+       line.trim().startsWith('2.') ||
+       line.trim().startsWith('3.') ||
+       line.trim().startsWith('4.') ||
+       line.trim().startsWith('5.') ||
+       line.includes('Morning') ||
+       line.includes('Afternoon') ||
+       line.includes('Evening') ||
+       line.includes('Urgent & Important:') ||
+       line.includes('Important Not Urgent:') ||
+       line.includes('Urgent Not Important:') ||
+       line.includes('Not Urgent & Not Important:')) && 
       line.length > 5
     );
     
     const blocks: string[] = [];
     let currentBlock = '';
+    let currentSection = '';
     
     for (const line of taskLines) {
-      if ((line.includes('Task:') || line.trim().startsWith('•') || line.trim().startsWith('-')) && currentBlock !== '') {
+      // Check for section headers
+      if (line.includes('Urgent & Important:') ||
+          line.includes('Important Not Urgent:') ||
+          line.includes('Urgent Not Important:') ||
+          line.includes('Not Urgent & Not Important:')) {
+        currentSection = line.trim();
+        continue;
+      }
+      
+      // Start new block for task items
+      if ((line.trim().startsWith('•') || 
+           line.trim().startsWith('-') ||
+           line.trim().match(/^\d+\./)) && 
+          currentBlock !== '') {
         blocks.push(currentBlock);
         currentBlock = line;
       } else {
@@ -180,6 +206,12 @@ class TaskMCPServer implements TaskMCPInterface {
     } else if (block.trim().startsWith('•') || block.trim().startsWith('-')) {
       const lines = block.trim().split('\n');
       title = lines[0].replace(/^[•-]\s*/, '').trim();
+    } else if (block.trim().match(/^\d+\./)) {
+      const lines = block.trim().split('\n');
+      title = lines[0].replace(/^\d+\.\s*/, '').trim();
+    } else if (block.includes('Morning') || block.includes('Afternoon') || block.includes('Evening')) {
+      const lines = block.trim().split('\n');
+      title = lines[0].trim();
     }
     
     return { title, description };
@@ -191,6 +223,23 @@ class TaskMCPServer implements TaskMCPInterface {
   private determinePriority(block: string): typeof priorityEnum.enumValues[number] {
     const text = block.toLowerCase();
     
+    // Check for section headers
+    if (text.includes('urgent & important')) {
+      return 'URGENT_IMPORTANT';
+    } else if (text.includes('important not urgent')) {
+      return 'NOT_URGENT_IMPORTANT';
+    } else if (text.includes('urgent not important')) {
+      return 'URGENT_NOT_IMPORTANT';
+    } else if (text.includes('not urgent & not important')) {
+      return 'NOT_URGENT_NOT_IMPORTANT';
+    }
+    
+    // Check for time-based urgency
+    if (text.includes('morning') && text.includes('day 1')) {
+      return 'URGENT_IMPORTANT';
+    }
+    
+    // Check for importance indicators
     if (text.includes('urgent') && text.includes('important')) {
       return 'URGENT_IMPORTANT';
     } else if (text.includes('urgent')) {
@@ -198,6 +247,15 @@ class TaskMCPServer implements TaskMCPInterface {
     } else if (text.includes('important')) {
       return 'NOT_URGENT_IMPORTANT';
     } else if (text.includes('not urgent') && text.includes('not important')) {
+      return 'NOT_URGENT_NOT_IMPORTANT';
+    }
+    
+    // Default priority based on time of day
+    if (text.includes('morning')) {
+      return 'URGENT_IMPORTANT';
+    } else if (text.includes('afternoon')) {
+      return 'NOT_URGENT_IMPORTANT';
+    } else if (text.includes('evening')) {
       return 'NOT_URGENT_NOT_IMPORTANT';
     }
     
