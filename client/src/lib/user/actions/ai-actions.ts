@@ -103,10 +103,28 @@ export async function generateScheduleAction(
  */
 export async function getAIRecommendations(userId: string) {
   try {
-    return await aiRecommendationQueries.getAll(userId);
+    // Add validation for userId to prevent database errors
+    if (!userId) {
+      console.warn('getAIRecommendations called without a valid userId');
+      return []; // Return empty array instead of throwing error
+    }
+    
+    console.log(`Fetching recommendations for user: ${userId}`);
+    
+    // Wrap the database query in a try-catch to handle any database errors
+    try {
+      const recommendations = await aiRecommendationQueries.getAll(userId);
+      console.log(`Successfully retrieved ${recommendations.length} recommendations`);
+      return recommendations;
+    } catch (dbError) {
+      console.error('Database error when fetching recommendations:', dbError);
+      // Return empty array instead of throwing error
+      return [];
+    }
   } catch (error) {
     console.error('Error fetching AI recommendations:', error);
-    throw new Error('Failed to fetch AI recommendations');
+    // Return empty array instead of throwing
+    return [];
   }
 }
 
@@ -141,15 +159,18 @@ export async function createTasksFromRecommendation(
   try {
     // Validate inputs
     if (!userId) {
+      console.error('createTasksFromRecommendation called without userId');
       throw new Error('User ID is required');
     }
     
     if (!recommendationText) {
+      console.error('createTasksFromRecommendation called without recommendation text');
       throw new Error('Recommendation text is required');
     }
     
+    console.log(`Creating tasks from recommendation ${recommendationId} for user ${userId}`);
+    
     // Extract task suggestions from the recommendation text
-    // This is a simple implementation - in a real app, you might want to use AI to extract structured tasks
     const lines = recommendationText.split('\n');
     const taskLines = lines.filter(line => 
       (line.includes('Task:') || 
@@ -180,74 +201,99 @@ export async function createTasksFromRecommendation(
     const createdTasks: Task[] = [];
     
     for (const block of taskBlocks) {
-      let title = '';
-      let description = block.trim();
-      let priority: typeof priorityEnum.enumValues[number] = 'NOT_URGENT_IMPORTANT'; // Default priority
-      
-      // Try to extract task title
-      if (block.includes('Task:')) {
-        const titleMatch = block.match(/Task:\s*([^\n]+)/);
-        if (titleMatch && titleMatch[1]) {
-          title = titleMatch[1].trim();
-        }
-      } else if (block.trim().startsWith('•') || block.trim().startsWith('-')) {
-        const lines = block.trim().split('\n');
-        title = lines[0].replace(/^[•-]\s*/, '').trim();
-      }
-      
-      // Skip if we couldn't extract a title
-      if (!title) continue;
-      
-      // Try to determine priority based on text
-      if (block.toLowerCase().includes('urgent') && block.toLowerCase().includes('important')) {
-        priority = 'URGENT_IMPORTANT';
-      } else if (block.toLowerCase().includes('urgent')) {
-        priority = 'URGENT_NOT_IMPORTANT';
-      } else if (block.toLowerCase().includes('important')) {
-        priority = 'NOT_URGENT_IMPORTANT';
-      } else if (block.toLowerCase().includes('not urgent') && block.toLowerCase().includes('not important')) {
-        priority = 'NOT_URGENT_NOT_IMPORTANT';
-      }
-      
-      // Create task
       try {
+        let title = '';
+        let description = block.trim();
+        let priority: typeof priorityEnum.enumValues[number] = 'NOT_URGENT_IMPORTANT'; // Default priority
+        
+        // Try to extract task title
+        if (block.includes('Task:')) {
+          const titleMatch = block.match(/Task:\s*([^\n]+)/);
+          if (titleMatch && titleMatch[1]) {
+            title = titleMatch[1].trim();
+          }
+        } else if (block.trim().startsWith('•') || block.trim().startsWith('-')) {
+          const lines = block.trim().split('\n');
+          title = lines[0].replace(/^[•-]\s*/, '').trim();
+        }
+        
+        // Skip if we couldn't extract a title
+        if (!title) {
+          console.warn('Skipping task block without title:', block.substring(0, 100));
+          continue;
+        }
+        
+        // Try to determine priority based on text
+        if (block.toLowerCase().includes('urgent') && block.toLowerCase().includes('important')) {
+          priority = 'URGENT_IMPORTANT';
+        } else if (block.toLowerCase().includes('urgent')) {
+          priority = 'URGENT_NOT_IMPORTANT';
+        } else if (block.toLowerCase().includes('important')) {
+          priority = 'NOT_URGENT_IMPORTANT';
+        } else if (block.toLowerCase().includes('not urgent') && block.toLowerCase().includes('not important')) {
+          priority = 'NOT_URGENT_NOT_IMPORTANT';
+        }
+        
+        // Create task
         const taskData = {
           title,
           description,
           priority,
         };
         
+        console.log('Creating task with data:', { ...taskData, description: description.substring(0, 100) });
+        
         const newTask = await taskQueries.create(userId, taskData);
         if (newTask && newTask[0]) {
           createdTasks.push(newTask[0]);
+          console.log('Successfully created task:', newTask[0].id);
+        } else {
+          console.warn('Task creation returned no result');
         }
-      } catch (error) {
-        console.error('Error creating task from recommendation:', error);
+      } catch (taskError) {
+        console.error('Error creating individual task:', taskError);
         // Continue with the next task even if one fails
       }
     }
     
     // If we didn't create any tasks, create at least one general task
     if (createdTasks.length === 0) {
-      const taskData = {
-        title: 'Task from AI recommendation',
-        description: recommendationText,
-        priority: 'NOT_URGENT_IMPORTANT' as typeof priorityEnum.enumValues[number],
-      };
-      
-      const newTask = await taskQueries.create(userId, taskData);
-      if (newTask && newTask[0]) {
-        createdTasks.push(newTask[0]);
+      console.log('No tasks created from blocks, creating general task');
+      try {
+        const taskData = {
+          title: 'Task from AI recommendation',
+          description: recommendationText,
+          priority: 'NOT_URGENT_IMPORTANT' as typeof priorityEnum.enumValues[number],
+        };
+        
+        const newTask = await taskQueries.create(userId, taskData);
+        if (newTask && newTask[0]) {
+          createdTasks.push(newTask[0]);
+          console.log('Successfully created general task:', newTask[0].id);
+        }
+      } catch (generalTaskError) {
+        console.error('Error creating general task:', generalTaskError);
       }
     }
     
-    // Mark the recommendation as applied
-    await markRecommendationApplied(userId, recommendationId);
+    // Only try to mark the recommendation as applied if we have a valid recommendationId
+    if (recommendationId > 0) {
+      try {
+        await markRecommendationApplied(userId, recommendationId);
+        console.log('Successfully marked recommendation as applied');
+      } catch (markError) {
+        console.error('Error marking recommendation as applied:', markError);
+        // Don't throw here, as we still want to return the created tasks
+      }
+    } else {
+      console.log('Skipping mark as applied since recommendationId is 0');
+    }
     
     revalidatePath('/ai-secretary');
     return createdTasks;
   } catch (error) {
-    console.error('Error creating tasks from recommendation:', error);
-    throw new Error('Failed to create tasks from recommendation');
+    console.error('Error in createTasksFromRecommendation:', error);
+    // Return a more specific error message
+    throw new Error(`Failed to create tasks from recommendation: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 } 
