@@ -128,9 +128,9 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
           Add Task
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Task</DialogTitle>
+          <DialogTitle className='text-foreground'>Create New Task</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
@@ -141,9 +141,9 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
               name="title"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Task title" {...field} />
+                  <FormLabel className='text-foreground'>Title</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
+                    <Input placeholder="Task title" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -156,9 +156,9 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
               name="description"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Task description" {...field} />
+                  <FormLabel className='text-foreground'>Description</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
+                    <Textarea placeholder="Task description" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -171,14 +171,14 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
               name="priority"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Priority</FormLabel>
+                  <FormLabel className='text-foreground'>Priority</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
                     defaultValue={field.value}
                   >
-                    <FormControl>
+                    <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                       <SelectTrigger>
-                        <SelectValue placeholder="Select priority" />
+                        <SelectValue placeholder="Select priority" className="text-gray-400 italic" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -199,12 +199,12 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
               name="dueDate"
               render={({ field }: { field: any }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Due Date</FormLabel>
+                  <FormLabel className='text-foreground'>Due Date</FormLabel>
                   <Calendar
                     mode="single"
                     selected={field.value}
                     onSelect={field.onChange}
-                    className="rounded-md border"
+                    className="rounded-md border bg-white text-black dark:bg-transparent dark:text-white"
                     initialFocus
                   />
                   <FormMessage />
@@ -218,11 +218,12 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
               name="estimatedTimeMinutes"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel>Estimated Time (minutes)</FormLabel>
-                  <FormControl>
+                  <FormLabel className='text-foreground'>Estimated Time (minutes)</FormLabel>
+                  <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input
                       type="number"
                       placeholder="Estimated time in minutes"
+                      className="placeholder:text-gray-400 placeholder:italic"
                       onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
                       value={field.value || ''}
                     />
@@ -234,9 +235,9 @@ export default function CreateTaskForm({ userId, onTaskCreated }: CreateTaskForm
             
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" type="button">Cancel</Button>
+                <Button variant="outline" type="button" className='text-foreground'>Cancel</Button>
               </DialogClose>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading} className='text-foreground'>
                 {loading ? 'Creating...' : 'Create Task'}
               </Button>
             </DialogFooter>
