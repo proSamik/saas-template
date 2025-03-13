@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useUserData } from '@/contexts/UserDataContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getTasks } from '@/lib/user/actions/task-actions'
 import { getCalendarEvents } from '@/lib/user/actions/calendar-actions'
@@ -14,30 +15,24 @@ import TaskAnalysisForm from './components/TaskAnalysisForm'
 import CreateTaskForm from './components/CreateTaskForm'
 import CreateEventForm from './components/CreateEventForm'
 
-// Define the Auth type from the AuthContext
-interface AuthState {
-  id: string
-  name: string
-  email: string
-  email_verified: boolean
-}
-
 /**
  * AI Secretary Dashboard Page
  * Main entry point for the AI secretary application
  */
 export default function AISecretaryPage() {
   const { userData } = useUserData()
+  const { auth } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   
-  // Get the user ID from auth context
-  const userId = (userData as any)?.auth?.id
+  // Get the user ID directly from auth context
+  const userId = auth?.id
 
   // Add debug logging
   console.log('userData:', userData)
+  console.log('auth:', auth)
   console.log('userId:', userId)
   console.log('loading state:', loading)
 
