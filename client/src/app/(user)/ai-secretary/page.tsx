@@ -15,6 +15,8 @@ import TaskAnalysisForm from './components/TaskAnalysisForm'
 import CreateTaskForm from './components/CreateTaskForm'
 import CreateEventForm from './components/CreateEventForm'
 import { toast } from 'sonner'
+import { AlertCircle, RefreshCcw } from 'lucide-react'
+import { Card } from '@/components/ui/card'
 
 /**
  * AI Secretary Dashboard Page
@@ -27,6 +29,8 @@ export default function AISecretaryPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [loadingRecommendations, setLoadingRecommendations] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<string>('tasks')
   
   // Get the user ID directly from auth context
@@ -46,31 +50,45 @@ export default function AISecretaryPage() {
       if (userId) {
         try {
           setLoading(true)
+          setError(null)
           console.log('Starting to fetch data...')
           
-          // Fetch tasks, events, and recommendations in parallel
-          const [taskData, eventData, recData] = await Promise.all([
-            getTasks(userId).catch(e => {
-              console.error('Error fetching tasks:', e)
-              return []
-            }),
-            getCalendarEvents(userId).catch(e => {
-              console.error('Error fetching events:', e)
-              return []
-            }),
-            getAIRecommendations(userId).catch(e => {
-              console.error('Error fetching recommendations:', e)
-              return []
-            })
-          ])
+          // Fetch tasks and events, which are essential
+          try {
+            const [taskData, eventData] = await Promise.all([
+              getTasks(userId).catch(e => {
+                console.error('Error fetching tasks:', e)
+                return []
+              }),
+              getCalendarEvents(userId).catch(e => {
+                console.error('Error fetching events:', e)
+                return []
+              })
+            ])
+            
+            console.log('Data fetched:', { taskData, eventData })
+            setTasks(taskData)
+            setEvents(eventData)
+          } catch (dataError) {
+            console.error('Error loading essential data:', dataError)
+            toast.error('Failed to load tasks and events')
+          }
           
-          console.log('Data fetched:', { taskData, eventData, recData })
-          
-          setTasks(taskData)
-          setEvents(eventData)
-          setRecommendations(recData)
+          // Fetch recommendations separately so that failures don't block the UI
+          setLoadingRecommendations(true)
+          try {
+            const recData = await getAIRecommendations(userId)
+            console.log('Recommendations fetched:', { recData })
+            setRecommendations(recData || [])
+          } catch (recError) {
+            console.error('Error loading recommendations:', recError)
+            // Don't show a toast for this since it's not critical
+          } finally {
+            setLoadingRecommendations(false)
+          }
         } catch (error) {
           console.error('Error loading user data:', error)
+          setError('Failed to load data. Please try refreshing the page.')
         } finally {
           console.log('Setting loading to false')
           setLoading(false)
@@ -79,11 +97,31 @@ export default function AISecretaryPage() {
         // If no userId is available after a reasonable time, stop loading
         console.log('No userId available, stopping loading')
         setLoading(false)
+        setLoadingRecommendations(false)
       }
     }
     
     loadUserData()
   }, [userId])
+
+  /**
+   * Retry loading recommendations if they failed
+   */
+  const retryLoadRecommendations = async () => {
+    if (!userId) return
+    
+    setLoadingRecommendations(true)
+    try {
+      const recData = await getAIRecommendations(userId)
+      setRecommendations(recData || [])
+      toast.success('Successfully loaded recommendations')
+    } catch (error) {
+      console.error('Error reloading recommendations:', error)
+      toast.error('Failed to load recommendations')
+    } finally {
+      setLoadingRecommendations(false)
+    }
+  }
   
   /**
    * Handle tasks created from AI recommendations
@@ -110,6 +148,29 @@ export default function AISecretaryPage() {
       <div className="container mx-auto py-10">
         <h1 className="text-2xl font-bold mb-4">AI Secretary</h1>
         <p>Loading your personalized dashboard...</p>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="container mx-auto py-10">
+        <h1 className="text-2xl font-bold mb-4">AI Secretary</h1>
+        <Card className="p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Error Loading Data</h2>
+              <p className="mb-4">{error}</p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Refresh Page
+              </button>
+            </div>
+          </div>
+        </Card>
       </div>
     )
   }
@@ -178,16 +239,35 @@ export default function AISecretaryPage() {
         </TabsContent>
         
         <TabsContent value="recommendations" className="space-y-4">
-          <AIRecommendationsList 
-            recommendations={recommendations}
-            userId={userId}
-            onRecommendationMarkedApplied={(appliedRecId: number) => {
-              setRecommendations(recommendations.map(r => 
-                r.id === appliedRecId ? {...r, isApplied: true, appliedAt: new Date()} : r
-              ))
-            }}
-            onTasksCreated={handleTasksCreatedFromRecommendation}
-          />
+          {loadingRecommendations ? (
+            <Card className="p-6 text-center">
+              <p className="mb-2">Loading AI recommendations...</p>
+            </Card>
+          ) : recommendations.length === 0 ? (
+            <Card className="p-6">
+              <div className="flex flex-col items-center justify-center">
+                <p className="mb-4">No recommendations found. This might be due to an error.</p>
+                <button
+                  onClick={retryLoadRecommendations}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Retry Loading Recommendations
+                </button>
+              </div>
+            </Card>
+          ) : (
+            <AIRecommendationsList 
+              recommendations={recommendations}
+              userId={userId}
+              onRecommendationMarkedApplied={(appliedRecId: number) => {
+                setRecommendations(recommendations.map(r => 
+                  r.id === appliedRecId ? {...r, isApplied: true, appliedAt: new Date()} : r
+                ))
+              }}
+              onTasksCreated={handleTasksCreatedFromRecommendation}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>
