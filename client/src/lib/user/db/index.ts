@@ -4,10 +4,15 @@ import * as schema from './schema';
 
 /**
  * Create a PostgreSQL connection pool
- * Uses the environment variable for database connection
+ * Uses environment variables for database connection
  */
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
+  host: process.env.POSTGRES_HOST || 'localhost',
+  user: process.env.POSTGRES_USER || 'postgres',
+  password: process.env.POSTGRES_PASSWORD || 'postgres',
+  database: process.env.POSTGRES_DB || 'saas-app',
+  port: parseInt(process.env.POSTGRES_PORT || '5432'),
+  ssl: false
 });
 
 /**
