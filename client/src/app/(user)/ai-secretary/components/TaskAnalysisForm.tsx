@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card' // Fixed import to only include Card
 import { AIRecommendation } from '@/types/ai-secretary'
 import { analyzeTasksAction } from '@/lib/user/actions/ai-actions'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
 
 /**
  * Props for the TaskAnalysisForm component
@@ -23,6 +24,7 @@ interface TaskAnalysisFormProps {
 export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAnalysisFormProps) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   /**
    * Handle form submission
@@ -32,6 +34,9 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
     
     if (!userId || !input.trim()) return
     
+    // Reset error state
+    setError(null)
+    
     try {
       setLoading(true)
       
@@ -39,6 +44,15 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
       const result = await analyzeTasksAction(userId, input)
       
       if (result) {
+        // Check if the result indicates an error
+        if (result.error) {
+          setError(result.recommendation)
+          toast.error('Error analyzing tasks', {
+            description: result.recommendation
+          })
+          return
+        }
+        
         // Create a recommendation object to match the AIRecommendation type
         const recommendation: AIRecommendation = {
           id: result.id,
@@ -51,11 +65,31 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
           isDeleted: false,
         }
         
-        onAnalysisComplete(recommendation)
-        setInput('')
+        // Only call onAnalysisComplete if we have a valid recommendation
+        // that doesn't contain error messages
+        if (!result.recommendation.includes('error') && 
+            !result.recommendation.includes('failed') &&
+            !result.recommendation.includes('unavailable')) {
+          onAnalysisComplete(recommendation)
+          setInput('')
+          toast.success('Analysis complete', {
+            description: 'Check the AI Recommendations tab to view your analysis'
+          })
+        } else {
+          // Show the error message from the AI service
+          setError(result.recommendation)
+          toast.error('AI Service Issue', {
+            description: result.recommendation
+          })
+        }
       }
     } catch (error) {
       console.error('Error analyzing tasks:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+      setError(errorMessage)
+      toast.error('Failed to analyze tasks', {
+        description: errorMessage
+      })
     } finally {
       setLoading(false)
     }
@@ -71,6 +105,17 @@ export default function TaskAnalysisForm({ userId, onAnalysisComplete }: TaskAna
         <p className="text-sm text-gray-500 mb-4">
           Describe your tasks and goals to get AI-powered recommendations for prioritization and scheduling
         </p>
+        
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4 flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-red-800">AI Analysis Error</p>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Textarea
