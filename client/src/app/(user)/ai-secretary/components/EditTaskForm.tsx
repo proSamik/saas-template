@@ -146,9 +146,9 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-white dark:bg-background dark:text-white">
         <DialogHeader>
-          <DialogTitle className='text-foreground'>Edit Task</DialogTitle>
+          <DialogTitle className='text-black dark:text-white'>Edit Task</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
@@ -159,7 +159,7 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
               name="title"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Title</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Title</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input placeholder="Task title" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
@@ -174,7 +174,7 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
               name="description"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Description</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Description</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Textarea placeholder="Task description" className="placeholder:text-gray-400 placeholder:italic" {...field} />
                   </FormControl>
@@ -189,7 +189,7 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
               name="priority"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Priority</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Priority</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
                     defaultValue={field.value}
@@ -218,7 +218,7 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
               name="dueDate"
               render={({ field }: { field: any }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel className='text-foreground'>Due Date</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Due Date</FormLabel>
                   <Calendar
                     mode="single"
                     selected={field.value}
@@ -237,7 +237,7 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
               name="estimatedTimeMinutes"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Estimated Time (minutes)</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Estimated Time (minutes)</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input
                       type="number"
@@ -258,7 +258,7 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
               name="actualTimeMinutes"
               render={({ field }: { field: any }) => (
                 <FormItem>
-                  <FormLabel className='text-foreground'>Actual Time (minutes)</FormLabel>
+                  <FormLabel className='text-black dark:text-white'>Actual Time (minutes)</FormLabel>
                   <FormControl className="bg-white text-black dark:bg-transparent dark:text-white">
                     <Input
                       type="number"
@@ -286,8 +286,8 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel className='text-foreground'>Mark as completed</FormLabel>
-                    <p className="text-sm text-foreground" >
+                    <FormLabel className='text-black dark:text-white'>Mark as completed</FormLabel>
+                    <p className="text-sm text-black dark:text-white" >
                       Check if this task is completed
                     </p>
                   </div>
@@ -297,9 +297,9 @@ export default function EditTaskForm({ task, userId, open, onOpenChange, onTaskU
             
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" type="button" className='text-foreground'>Cancel</Button>
+                <Button variant="outline" type="button" className='text-black dark:text-white'>Cancel</Button>
               </DialogClose>
-              <Button type="submit" disabled={loading} className='text-foreground'>
+              <Button type="submit" disabled={loading} className='text-black dark:text-white'>
                 {loading ? 'Saving...' : 'Save Changes'}
               </Button>
             </DialogFooter>
