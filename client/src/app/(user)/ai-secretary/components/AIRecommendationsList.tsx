@@ -119,11 +119,11 @@ export default function AIRecommendationsList({
         <Card key={recommendation.id} className={recommendation.isApplied ? 'bg-muted/50' : ''}>
           <div className="flex justify-between items-start p-4">
             <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <h3 className="flex items-center gap-2 text-lg font-semibold ">
                 <Sparkles className="h-5 w-5 text-primary" />
                 AI Recommendation
               </h3>
-              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 mt-1 text-sm ">
                 <Clock className="h-3 w-3" />
                 {formatDate(recommendation.createdAt)}
                 {recommendation.isApplied && (
@@ -158,14 +158,14 @@ export default function AIRecommendationsList({
               </div>
             )}
           </div>
-          <div className="prose prose-sm dark:prose-invert max-w-none p-4 text-foreground">
+          <div className="prose prose-sm dark:prose-invert max-w-none p-4 ">
             {recommendation.recommendation.split('\n').map((paragraph: string, index: number) => (
-              <p key={index} className="text-foreground">{paragraph}</p>
+              <p key={index} className="">{paragraph}</p>
             ))}
           </div>
           {recommendation.context && (
             <div className="text-sm text-muted-foreground border-t border-border pt-4 p-4">
-              <strong className="text-foreground">Based on:</strong> {recommendation.context}
+              <strong className="">Based on:</strong> {recommendation.context}
             </div>
           )}
         </Card>
