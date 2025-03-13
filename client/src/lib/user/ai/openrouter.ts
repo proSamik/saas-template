@@ -37,7 +37,15 @@ Based on the user's tasks, provide:
 Be concise, practical, and focus on helping the user maximize their productivity.
 `;
 
+  // Check if API key is available
+  if (!process.env.NEXT_PUBLIC_OPENROUTER_API_KEY) {
+    console.error('OpenRouter API key is missing');
+    return 'AI analysis is not available at this time. Please check your API configuration.';
+  }
+
   try {
+    console.log('Sending request to OpenRouter API...');
+    
     const completion = await openRouter.chat.completions.create({
       model: 'openai/gpt-4-turbo',
       messages: [
@@ -48,9 +56,34 @@ Be concise, practical, and focus on helping the user maximize their productivity
       max_tokens: 1200,
     });
 
+    if (!completion.choices || completion.choices.length === 0) {
+      console.error('No completion choices returned from OpenRouter');
+      return 'The AI analysis service returned an empty response. Please try again later.';
+    }
+
     return completion.choices[0]?.message.content || 'No analysis could be generated.';
   } catch (error) {
+    // Log detailed error information
     console.error('Error in AI task analysis:', error);
+    
+    // Check for specific error types
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      
+      if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+        return 'AI analysis failed due to API authentication issues. Please check your API key configuration.';
+      }
+      
+      if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+        return 'AI analysis is temporarily unavailable due to rate limits. Please try again in a few minutes.';
+      }
+      
+      if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+        return 'AI analysis failed due to network issues. Please check your internet connection and try again.';
+      }
+    }
+    
+    // Default error message
     return 'An error occurred while analyzing your tasks. Please try again later.';
   }
 }
