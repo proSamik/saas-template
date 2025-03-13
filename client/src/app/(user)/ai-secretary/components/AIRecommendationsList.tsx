@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card' // Removed unused imports
-import { AIRecommendation } from '@/types/ai-secretary'
-import { markRecommendationApplied } from '@/lib/user/actions/ai-actions'
-import { CheckCircle, Clock, Sparkles } from 'lucide-react'
+import { AIRecommendation, Task } from '@/types/ai-secretary'
+import { markRecommendationApplied, createTasksFromRecommendation } from '@/lib/user/actions/ai-actions'
+import { CheckCircle, Clock, Sparkles, Plus, ListTodo } from 'lucide-react'
+import { toast } from 'sonner'
 
 /**
  * Props for the AIRecommendationsList component
@@ -14,6 +15,7 @@ interface AIRecommendationsListProps {
   recommendations: AIRecommendation[]
   userId?: string
   onRecommendationMarkedApplied: (recommendationId: number) => void
+  onTasksCreated?: (tasks: Task[]) => void
 }
 
 /**
@@ -22,9 +24,11 @@ interface AIRecommendationsListProps {
 export default function AIRecommendationsList({ 
   recommendations, 
   userId, 
-  onRecommendationMarkedApplied 
+  onRecommendationMarkedApplied,
+  onTasksCreated 
 }: AIRecommendationsListProps) {
   const [loadingId, setLoadingId] = useState<number | null>(null)
+  const [creatingTasksId, setCreatingTasksId] = useState<number | null>(null)
   
   /**
    * Format date for display
@@ -54,10 +58,45 @@ export default function AIRecommendationsList({
       setLoadingId(recommendationId)
       await markRecommendationApplied(userId, recommendationId)
       onRecommendationMarkedApplied(recommendationId)
+      toast.success('Recommendation marked as applied')
     } catch (error) {
       console.error('Error marking recommendation as applied:', error)
+      toast.error('Failed to mark recommendation as applied')
     } finally {
       setLoadingId(null)
+    }
+  }
+  
+  /**
+   * Handle creating tasks from a recommendation
+   * @param recommendation - The recommendation to create tasks from
+   */
+  const handleCreateTasks = async (recommendation: AIRecommendation) => {
+    if (!userId) return
+    
+    try {
+      setCreatingTasksId(recommendation.id)
+      const tasks = await createTasksFromRecommendation(
+        userId, 
+        recommendation.id, 
+        recommendation.recommendation
+      )
+      
+      // Update UI to show recommendation as applied
+      onRecommendationMarkedApplied(recommendation.id)
+      
+      // Notify parent component about new tasks
+      if (onTasksCreated && tasks.length > 0) {
+        onTasksCreated(tasks)
+      }
+      
+      // Show success message
+      toast.success(`Created ${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} from recommendation`)
+    } catch (error) {
+      console.error('Error creating tasks from recommendation:', error)
+      toast.error('Failed to create tasks from recommendation')
+    } finally {
+      setCreatingTasksId(null)
     }
   }
   
@@ -97,14 +136,26 @@ export default function AIRecommendationsList({
               </div>
             </div>
             {!recommendation.isApplied && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleMarkApplied(recommendation.id)}
-                disabled={loadingId === recommendation.id}
-              >
-                {loadingId === recommendation.id ? 'Marking...' : 'Mark as Applied'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex gap-1 items-center"
+                  onClick={() => handleCreateTasks(recommendation)}
+                  disabled={creatingTasksId === recommendation.id || loadingId === recommendation.id}
+                >
+                  <ListTodo className="h-4 w-4" />
+                  {creatingTasksId === recommendation.id ? 'Creating tasks...' : 'Create Tasks'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleMarkApplied(recommendation.id)}
+                  disabled={loadingId === recommendation.id || creatingTasksId === recommendation.id}
+                >
+                  {loadingId === recommendation.id ? 'Marking...' : 'Mark as Applied'}
+                </Button>
+              </div>
             )}
           </div>
           <div className="prose prose-sm dark:prose-invert max-w-none p-4">
