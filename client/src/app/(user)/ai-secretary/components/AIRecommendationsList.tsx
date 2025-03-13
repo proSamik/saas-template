@@ -116,21 +116,21 @@ export default function AIRecommendationsList({
   return (
     <div className="space-y-6">
       {recommendations.map((recommendation) => (
-        <Card key={recommendation.id} className={recommendation.isApplied ? 'bg-gray-50 dark:bg-gray-900/50' : ''}>
+        <Card key={recommendation.id} className={recommendation.isApplied ? 'bg-muted/50' : ''}>
           <div className="flex justify-between items-start p-4">
             <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold">
-                <Sparkles className="h-5 w-5 text-blue-500" />
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Sparkles className="h-5 w-5 text-primary" />
                 AI Recommendation
               </h3>
-              <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {formatDate(recommendation.createdAt)}
                 {recommendation.isApplied && (
                   <>
                     <span className="mx-1">•</span>
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span className="text-green-600 dark:text-green-400">Applied</span>
+                    <CheckCircle className="h-3 w-3 text-success" />
+                    <span className="text-success">Applied</span>
                   </>
                 )}
               </div>
@@ -158,14 +158,14 @@ export default function AIRecommendationsList({
               </div>
             )}
           </div>
-          <div className="prose prose-sm dark:prose-invert max-w-none p-4">
+          <div className="prose prose-sm dark:prose-invert max-w-none p-4 text-foreground">
             {recommendation.recommendation.split('\n').map((paragraph: string, index: number) => (
-              <p key={index}>{paragraph}</p>
+              <p key={index} className="text-foreground">{paragraph}</p>
             ))}
           </div>
           {recommendation.context && (
-            <div className="text-sm text-muted-foreground border-t pt-4 p-4">
-              <strong>Based on:</strong> {recommendation.context}
+            <div className="text-sm text-muted-foreground border-t border-border pt-4 p-4">
+              <strong className="text-foreground">Based on:</strong> {recommendation.context}
             </div>
           )}
         </Card>
