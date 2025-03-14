@@ -84,6 +84,12 @@ const Navigation = () => {
               >
                 Demo
               </button>
+              <Link
+                href="/blog"
+                className="text-sm font-medium text-light-foreground dark:text-dark-foreground hover:text-primary-600 transition-colors"
+              >
+                Blog
+              </Link>
               {auth && (
                 <Link
                   href="/overview"
@@ -192,6 +198,13 @@ const Navigation = () => {
               >
                 Demo
               </button>
+              <Link
+                href="/blog"
+                className="block py-2 text-base font-medium text-light-muted dark:text-dark-muted hover:text-light-foreground dark:hover:text-dark-foreground"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Blog
+              </Link>
               {auth && (
                 <Link
                   href="/overview"
