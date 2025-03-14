@@ -1,5 +1,6 @@
 import React from 'react';
 import BlogPageClient from './BlogPageClient';
+import { getAllPosts } from '@/lib/blog-utils';
 
 /**
  * Metadata for the blog page
@@ -16,8 +17,11 @@ export const metadata = {
 
 /**
  * Server component for the blog page
- * This component could fetch blog posts from a CMS or database in a real implementation
+ * Fetches blog posts from markdown files in the public directory
  */
 export default function BlogPage() {
-  return <BlogPageClient />;
+  // Get all blog posts at build time
+  const posts = getAllPosts();
+  
+  return <BlogPageClient posts={posts} />;
 } 
