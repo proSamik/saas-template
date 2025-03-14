@@ -7,6 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import Navigation from '@/components/Navigation'
 import PageView from '@/components/PageView'
 import JsonLd from '@/components/seo/JsonLd'
+import PrismInit from '@/components/PrismInit'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -81,6 +82,7 @@ export default function RootLayout({
             <Navigation />
             <PageView />
             {children}
+            <PrismInit />
             <Toaster 
               position="bottom-right"
               toastOptions={{
