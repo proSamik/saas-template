@@ -330,16 +330,26 @@ body {
   tab-size: 4;
 }
 
+/* Fix for dark theme highlighting issue */
+.prose pre code {
+  background-color: transparent !important;
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
 /* Token colors */
 .prose .token.comment,
 .prose .token.prolog,
 .prose .token.doctype,
 .prose .token.cdata {
   color: #6a9955;
+  text-shadow: none;
 }
 
 .prose .token.punctuation {
   color: #d4d4d4;
+  text-shadow: none;
 }
 
 .prose .namespace {
@@ -354,6 +364,7 @@ body {
 .prose .token.symbol,
 .prose .token.deleted {
   color: #b5cea8;
+  text-shadow: none;
 }
 
 .prose .token.selector,
@@ -363,6 +374,7 @@ body {
 .prose .token.builtin,
 .prose .token.inserted {
   color: #ce9178;
+  text-shadow: none;
 }
 
 .prose .token.operator,
@@ -371,23 +383,27 @@ body {
 .prose .language-css .token.string,
 .prose .style .token.string {
   color: #d4d4d4;
+  text-shadow: none;
 }
 
 .prose .token.atrule,
 .prose .token.attr-value,
 .prose .token.keyword {
   color: #569cd6;
+  text-shadow: none;
 }
 
 .prose .token.function,
 .prose .token.class-name {
   color: #dcdcaa;
+  text-shadow: none;
 }
 
 .prose .token.regex,
 .prose .token.important,
 .prose .token.variable {
   color: #9cdcfe;
+  text-shadow: none;
 }
 
 .prose .token.important,
