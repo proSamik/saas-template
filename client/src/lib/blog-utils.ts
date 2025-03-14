@@ -4,6 +4,14 @@ import matter from 'gray-matter';
 import { remark } from 'remark';
 import remarkGfm from 'remark-gfm';
 import remarkHtml from 'remark-html';
+import remarkParse from 'remark-parse';
+import remarkRehype from 'remark-rehype';
+import remarkEmoji from 'remark-emoji';
+import rehypeStringify from 'rehype-stringify';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import { BlogPost } from '@/app/blog/BlogList';
 
 const postsDirectory = path.join(process.cwd(), 'public/blog/posts');
@@ -86,10 +94,17 @@ export async function getPostBySlug(slug: string) {
     // Fix relative image paths before processing
     const contentWithFixedPaths = fixImagePaths(content);
     
-    // Convert markdown to HTML with GitHub-flavored markdown support
+    // Enhanced markdown processing pipeline for GitHub-flavored markdown support
     const processedContent = await remark()
-      .use(remarkGfm) // GitHub-flavored markdown
-      .use(remarkHtml, { sanitize: false }) // Allow HTML in markdown
+      .use(remarkParse)
+      .use(remarkEmoji) // Support for emoji shortcodes
+      .use(remarkGfm) // GitHub-flavored markdown (tables, strikethrough, etc.)
+      .use(remarkRehype, { allowDangerousHtml: true }) // Convert markdown AST to HTML AST
+      .use(rehypeRaw) // Parse HTML in markdown
+      .use(rehypeSanitize) // Sanitize HTML
+      .use(rehypeSlug) // Add IDs to headings
+      .use(rehypeAutolinkHeadings) // Add links to headings
+      .use(rehypeStringify) // Convert HTML AST to string
       .process(contentWithFixedPaths);
     
     const contentHtml = processedContent.toString();
@@ -116,14 +131,15 @@ export async function getPostBySlug(slug: string) {
 }
 
 /**
- * Get all available blog post slugs
+ * Get all blog post slugs for static path generation
  */
 export function getAllPostSlugs() {
   const fileNames = fs.readdirSync(postsDirectory);
-  
   return fileNames
     .filter(fileName => fileName.endsWith('.md'))
-    .map(fileName => ({
-      slug: fileName.replace(/\.md$/, '')
-    }));
+    .map(fileName => {
+      return {
+        slug: fileName.replace(/\.md$/, '')
+      };
+    });
 } 
