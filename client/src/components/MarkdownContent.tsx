@@ -1,58 +1,83 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-jsx';
+import 'prismjs/components/prism-tsx';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-markup';
+import 'prismjs/components/prism-bash';
+import 'prismjs/components/prism-json';
 
 /**
- * Enhances HTML content by adding copy buttons to code blocks and handling other
- * markdown-specific interactions.
+ * Custom MarkdownContent component with syntax highlighting and code copy buttons
  */
 const MarkdownContent = ({ content }: { content: string }) => {
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Process the rendered content to add copy buttons to code blocks
+  // Add copy buttons to code blocks and apply syntax highlighting after content is rendered
   useEffect(() => {
     if (!contentRef.current) return;
+    
+    // Apply Prism.js syntax highlighting
+    Prism.highlightAllUnder(contentRef.current);
     
     // Find all pre elements (code blocks)
     const preElements = contentRef.current.querySelectorAll('pre');
     
     preElements.forEach((preElement) => {
-      // Create copy button
-      const copyButton = document.createElement('button');
-      copyButton.textContent = 'Copy';
-      copyButton.className = 'copy-button';
-      
-      // Add click event to copy button
-      copyButton.addEventListener('click', () => {
-        // Find code element within pre
-        const codeElement = preElement.querySelector('code');
-        if (!codeElement) return;
+      // Only add copy button if it doesn't already exist
+      if (!preElement.querySelector('.copy-button')) {
+        // Create copy button
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-button';
+        copyButton.setAttribute('aria-label', 'Copy code');
+        copyButton.setAttribute('title', 'Copy code');
         
-        // Copy code to clipboard
-        const textToCopy = codeElement.textContent || '';
-        navigator.clipboard.writeText(textToCopy)
-          .then(() => {
-            // Indicate successful copy
-            copyButton.textContent = 'Copied!';
-            setTimeout(() => {
-              copyButton.textContent = 'Copy';
-            }, 2000);
-          })
-          .catch(err => {
-            console.error('Could not copy text: ', err);
-            copyButton.textContent = 'Failed to copy';
-            setTimeout(() => {
-              copyButton.textContent = 'Copy';
-            }, 2000);
-          });
-      });
-      
-      // Add button to pre element
-      preElement.appendChild(copyButton);
+        // Add click event to copy button
+        copyButton.addEventListener('click', () => {
+          // Find code element within pre
+          const codeElement = preElement.querySelector('code');
+          if (!codeElement) return;
+          
+          // Copy code to clipboard
+          const textToCopy = codeElement.textContent || '';
+          navigator.clipboard.writeText(textToCopy)
+            .then(() => {
+              // Indicate successful copy with checkmark icon
+              copyButton.classList.add('copied');
+              copyButton.setAttribute('title', 'Copied!');
+              
+              setTimeout(() => {
+                copyButton.classList.remove('copied');
+                copyButton.setAttribute('title', 'Copy code');
+              }, 2000);
+            })
+            .catch(err => {
+              console.error('Could not copy text: ', err);
+              copyButton.setAttribute('title', 'Failed to copy');
+              
+              setTimeout(() => {
+                copyButton.setAttribute('title', 'Copy code');
+              }, 2000);
+            });
+        });
+        
+        // Add button to pre element
+        preElement.appendChild(copyButton);
+      }
     });
     
-    // Process emojis if needed
-    // This is a simple replacement, you might want to use a more robust emoji library
+    // Process emojis
+    processEmojis(contentRef.current);
+  }, [content]);
+  
+  /**
+   * Process emoji shortcodes
+   */
+  const processEmojis = (element: HTMLElement) => {
     const emojiMap: Record<string, string> = {
       ":smile:": "😊",
       ":heart:": "❤️",
@@ -62,7 +87,7 @@ const MarkdownContent = ({ content }: { content: string }) => {
     
     // Find all text nodes
     const walker = document.createTreeWalker(
-      contentRef.current,
+      element,
       NodeFilter.SHOW_TEXT,
       null
     );
@@ -86,8 +111,7 @@ const MarkdownContent = ({ content }: { content: string }) => {
         textNode.textContent = newContent;
       }
     });
-    
-  }, [content]);
+  };
 
   return (
     <div 
