@@ -4,6 +4,7 @@
  * to help search engines discover and index your content
  */
 import { MetadataRoute } from 'next';
+import { getAllPosts } from '@/lib/blog-utils';
 
 // Base URL for your site
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com';
@@ -13,13 +14,11 @@ const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://example.com';
  * This can be expanded to fetch from a CMS, database, or API
  */
 const getDynamicRoutes = async () => {
-  // Example: Blog posts
-  // In a real app, you would fetch these from your CMS or database
-  const blogPosts = [
-    { slug: 'first-post', lastModified: new Date() },
-    { slug: 'second-post', lastModified: new Date('2023-12-01') },
-    { slug: 'third-post', lastModified: new Date('2023-11-15') },
-  ];
+  // Fetch real blog posts using our utility function
+  const blogPosts = getAllPosts().map(post => ({
+    slug: post.slug,
+    lastModified: post.date ? new Date(post.date) : new Date()
+  }));
   
   // Example: Product pages
   // In a real app, you would fetch these from your product database
