@@ -3,7 +3,6 @@ import path from 'path';
 import matter from 'gray-matter';
 import { remark } from 'remark';
 import remarkGfm from 'remark-gfm';
-import remarkHtml from 'remark-html';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
 import remarkEmoji from 'remark-emoji';
