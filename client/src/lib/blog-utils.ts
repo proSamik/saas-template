@@ -56,6 +56,23 @@ export function getAllPosts(): BlogPost[] {
 }
 
 /**
+ * Fix relative image paths in markdown content
+ * - Replaces ./images/ with /blog/posts/images/
+ * - Replaces ../images/ with /blog/posts/images/
+ */
+function fixImagePaths(content: string): string {
+  // Fix markdown image syntax: ![alt](./images/file.png)
+  content = content.replace(/!\[(.*?)\]\(\.\/images\/(.*?)\)/g, '![$1](/blog/posts/images/$2)');
+  content = content.replace(/!\[(.*?)\]\(\.\.\/(images\/.*?)\)/g, '![$1](/blog/posts/$2)');
+  
+  // Fix HTML image tags: <img src="./images/file.png" />
+  content = content.replace(/src=["']\.\/images\/([^"']+)["']/g, 'src="/blog/posts/images/$1"');
+  content = content.replace(/src=["']\.\.\/(images\/[^"']+)["']/g, 'src="/blog/posts/$1"');
+  
+  return content;
+}
+
+/**
  * Get a single blog post by slug
  */
 export async function getPostBySlug(slug: string) {
@@ -66,11 +83,14 @@ export async function getPostBySlug(slug: string) {
     // Parse markdown frontmatter and content
     const { data, content } = matter(fileContents);
     
+    // Fix relative image paths before processing
+    const contentWithFixedPaths = fixImagePaths(content);
+    
     // Convert markdown to HTML with GitHub-flavored markdown support
     const processedContent = await remark()
       .use(remarkGfm) // GitHub-flavored markdown
       .use(remarkHtml, { sanitize: false }) // Allow HTML in markdown
-      .process(content);
+      .process(contentWithFixedPaths);
     
     const contentHtml = processedContent.toString();
     
