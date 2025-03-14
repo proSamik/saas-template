@@ -62,11 +62,7 @@ export function getAllPosts(): BlogPost[] {
   return allPostsData;
 }
 
-/**
- * Fix relative image paths in markdown content
- * - Replaces ./images/ with /blog/posts/images/
- * - Replaces ../images/ with /blog/posts/images/
- */
+
 function fixImagePaths(content: string): string {
   // Fix markdown image syntax: ![alt](./images/file.png)
   content = content.replace(/!\[(.*?)\]\(\.\/images\/(.*?)\)/g, '![$1](/blog/posts/images/$2)');
