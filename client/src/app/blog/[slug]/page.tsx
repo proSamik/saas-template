@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { getPostBySlug, getAllPostSlugs } from '@/lib/blog-utils';
+import MarkdownContent from '@/components/MarkdownContent';
 
 /**
  * Generate metadata for the blog post page
@@ -98,10 +99,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
             </div>
           </header>
           
-          <div 
-            className="prose prose-blue dark:prose-invert prose-lg max-w-none"
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          />
+          <MarkdownContent content={post.content} />
         </article>
       </div>
     </div>
